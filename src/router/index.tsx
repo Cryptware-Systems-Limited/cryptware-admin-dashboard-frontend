@@ -1,0 +1,24 @@
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import DashboardLayout from "@/layouts/DashboardLayout";
+import Overview from "@/pages/Overview";
+import Reports from "@/pages/Reports";
+import Clients from "@/pages/Clients";
+import GeographicCoverage from "@/pages/GeographicCoverage";
+import InvoiceMonitoring from "@/pages/InvoiceMonitoring";
+import NotFound from "@/pages/NotFound";
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <DashboardLayout />,
+    children: [
+      { index: true, element: <Navigate to="/overview" replace /> },
+      { path: "overview", element: <Overview /> },
+      { path: "reports", element: <Reports /> },
+      { path: "clients", element: <Clients /> },
+      { path: "geographic-coverage", element: <GeographicCoverage /> },
+      { path: "invoice-monitoring", element: <InvoiceMonitoring /> },
+    ],
+  },
+  { path: "*", element: <NotFound /> },
+]);
