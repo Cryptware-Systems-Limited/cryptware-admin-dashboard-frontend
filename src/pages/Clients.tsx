@@ -205,15 +205,16 @@ export default function Clients() {
                 key={rag}
                 onClick={() => setRagFilter((prev) => (prev === rag ? "All" : rag))}
                 className={cn(
-                  "flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all",
-                  cfg.bg, cfg.border,
+                  "relative flex items-center gap-4 px-5 py-3.5 rounded-xl border text-left transition-all overflow-hidden",
+                  "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700",
+                  "hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm",
                   active && "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-slate-900"
                 )}
               >
-                <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", cfg.dot)} />
+                <span className={cn("absolute left-0 inset-y-0 w-1 rounded-l-xl", cfg.dot)} />
                 <div className="min-w-0">
-                  <p className={cn("text-sm font-bold", cfg.text)}>{count}</p>
-                  <p className={cn("text-[11px]", cfg.text, "opacity-70")}>{cfg.label} · {pct}%</p>
+                  <p className={cn("text-2xl font-black leading-none", cfg.text)}>{count}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">{cfg.label} · {pct}%</p>
                 </div>
               </button>
             );
@@ -296,7 +297,7 @@ export default function Clients() {
       {/* ── Master List Table ── */}
       {activeTab === "master" && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <Table>
+          <Table className="[&_td]:align-top">
             <TableHeader className="bg-slate-50 dark:bg-slate-800/60">
               <TableRow className="hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-default">
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("name")}>
@@ -327,10 +328,10 @@ export default function Clients() {
                 filtered.map((client) => (
                   <TableRow key={client.id} onClick={() => navigate(`/clients/${client.id}`)}>
                     {/* Client */}
-                    <TableCell>
-                      <div className="flex items-center gap-3">
+                    <TableCell className="pt-3">
+                      <div className="flex items-start gap-3">
                         <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm"
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm mt-0.5"
                           style={avatarGradient(client.name)}
                         >
                           {client.name[0]}
@@ -351,17 +352,17 @@ export default function Clients() {
                       {client.erpSystem === "None" ? (
                         <span className="text-slate-300 dark:text-slate-600 text-sm">—</span>
                       ) : (
-                        <span className="text-xs font-medium font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                        <span className="text-xs font-medium font-mono whitespace-nowrap bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
                           {client.erpSystem}
                         </span>
                       )}
                     </TableCell>
 
                     {/* Service */}
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
+                    <TableCell className="pt-3">
+                      <div className="flex flex-col gap-1">
                         {client.serviceTypes.map((t) => (
-                          <span key={t} className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", SERVICE_BADGE[t])}>
+                          <span key={t} className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap w-fit", SERVICE_BADGE[t])}>
                             {t}
                           </span>
                         ))}
@@ -369,7 +370,7 @@ export default function Clients() {
                     </TableCell>
 
                     {/* Status */}
-                    <TableCell>
+                    <TableCell className="pt-3">
                       <span className={cn("inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full", STATUS_BADGE[client.projectStatus])}>
                         <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[client.projectStatus])} />
                         {client.projectStatus}
@@ -377,7 +378,7 @@ export default function Clients() {
                     </TableCell>
 
                     {/* RAG */}
-                    <TableCell>
+                    <TableCell className="pt-3">
                       <div className="flex items-center gap-2">
                         <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", RAG_CONFIG[client.ragStatus].dot)} />
                         <span className="text-xs text-slate-600 dark:text-slate-400">{RAG_CONFIG[client.ragStatus].label}</span>
@@ -385,7 +386,7 @@ export default function Clients() {
                     </TableCell>
 
                     {/* Activity */}
-                    <TableCell className="max-w-xs">
+                    <TableCell className="max-w-xs pt-3">
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate leading-relaxed">
                         {client.activityNote}
                       </p>

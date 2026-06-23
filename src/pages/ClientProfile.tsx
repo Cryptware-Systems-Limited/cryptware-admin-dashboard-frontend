@@ -184,7 +184,6 @@ export default function ClientProfile() {
 
       {/* ── Hero ── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        {/* Accent banner */}
         <div className="h-1.5 w-full" style={avatarGradient(client.name)} />
         <div className="flex flex-wrap items-start gap-4 p-5">
           <div
@@ -293,34 +292,19 @@ export default function ClientProfile() {
             </div>
           </Field>
           <Field label="Project Status">
-            <select
-              value={client.projectStatus}
-              onChange={(e) => setClient((c) => c && { ...c, projectStatus: e.target.value as ProjectStatus })}
-              className="mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
-            >
-              <option value="Live">Live</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Blocked">Blocked</option>
-              <option value="Not Started">Not Started</option>
-            </select>
+            <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full inline-block mt-0.5", STATUS_BADGE[client.projectStatus])}>
+              {client.projectStatus}
+            </span>
           </Field>
           <Field label="RAG Status">
             <div className="flex items-center gap-2 mt-0.5">
               <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", rag.dot)} />
-              <select
-                value={client.ragStatus}
-                onChange={(e) => setClient((c) => c && { ...c, ragStatus: e.target.value as RAGStatus })}
-                className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
-              >
-                <option value="GREEN">Green — On Track</option>
-                <option value="AMBER">Amber — At Risk</option>
-                <option value="RED">Red — Critical</option>
-                <option value="PENDING">Pending — No Kickoff</option>
-              </select>
+              <span className={cn("text-sm font-semibold", rag.text)}>{rag.label}</span>
             </div>
           </Field>
+          <Field label="Activity Description" value={client.activityNote} />
         </div>
-        <Field label="Latest Activity / Update">
+        <Field label="Latest Update Note">
           <div className="mt-1.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
             <EditableNote
               value={client.activityNote}
@@ -422,7 +406,49 @@ export default function ClientProfile() {
 
       {/* ── Section 5: Admin Controls ── */}
       <SectionCard title="Admin Controls" icon={<ShieldExclamationIcon className="w-4 h-4" />} accent="red">
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Editable status dropdowns */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mb-5">
+          <Field label="Project Status">
+            <select
+              value={client.projectStatus}
+              onChange={(e) => setClient((c) => c && { ...c, projectStatus: e.target.value as ProjectStatus })}
+              className="mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer w-full"
+            >
+              <option value="Live">Live</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Blocked">Blocked</option>
+              <option value="Not Started">Not Started</option>
+            </select>
+          </Field>
+          <Field label="RAG Status">
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", rag.dot)} />
+              <select
+                value={client.ragStatus}
+                onChange={(e) => setClient((c) => c && { ...c, ragStatus: e.target.value as RAGStatus })}
+                className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer flex-1"
+              >
+                <option value="GREEN">Green — On Track</option>
+                <option value="AMBER">Amber — At Risk</option>
+                <option value="RED">Red — Critical</option>
+                <option value="PENDING">Pending — No Kickoff</option>
+              </select>
+            </div>
+          </Field>
+        </div>
+
+        {/* Editable implementation notes */}
+        <Field label="Implementation Notes">
+          <div className="mt-1.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <EditableNote
+              value={client.activityNote}
+              onSave={(note) => setClient((c) => c && { ...c, activityNote: note })}
+            />
+          </div>
+        </Field>
+
+        {/* Suspend / Reactivate */}
+        <div className="flex flex-wrap items-center gap-3 mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
           {isSuspended ? (
             <button
               onClick={() => setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Active" } })}
