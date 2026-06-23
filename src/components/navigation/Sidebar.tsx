@@ -34,18 +34,21 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
 
+  const isClientsActive =
+    location.pathname === "/clients" || location.pathname.startsWith("/clients/");
+
   return (
     <motion.aside
       animate={{ width: collapsed ? 72 : 240 }}
       transition={{ duration: 0.25, ease: "easeInOut" }}
-      className="relative flex flex-col h-full bg-slate-900 shrink-0 overflow-hidden z-20"
-      style={{ boxShadow: "4px 0 24px rgba(15,23,42,0.18)" }}
+      className="relative flex flex-col h-full bg-slate-900 dark:bg-slate-950 shrink-0 overflow-hidden z-20 transition-colors"
+      style={{ boxShadow: "4px 0 24px rgba(15,23,42,0.25)" }}
     >
-      {/* Decorative top gradient */}
-      <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-orange-600/20 to-transparent pointer-events-none" />
+      {/* Decorative gradient */}
+      <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-orange-600/15 to-transparent pointer-events-none" />
 
-      {/* Logo area */}
-      <div className="relative flex items-center gap-3 px-4 py-5 border-b border-slate-700/60">
+      {/* Logo */}
+      <div className="relative flex items-center gap-3 px-4 py-5 border-b border-slate-700/60 dark:border-slate-800/60">
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-600 shrink-0 shadow-lg shadow-orange-600/30">
           <span className="text-white font-bold text-sm">CW</span>
         </div>
@@ -65,10 +68,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </AnimatePresence>
       </div>
 
-      {/* Nav items */}
+      {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
         {NAV_ITEMS.map((item) => {
-          const isActive = location.pathname === item.href;
+          const isActive =
+            item.href === "/clients"
+              ? isClientsActive
+              : location.pathname === item.href;
           const Icon = isActive ? item.iconActive : item.icon;
 
           return (
@@ -79,10 +85,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 "group relative flex items-center gap-3 px-2.5 py-2.5 rounded-lg active:scale-95 transition-all duration-200",
                 isActive
                   ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-900"
               )}
             >
-              {/* Active indicator glow */}
               {isActive && (
                 <motion.div
                   layoutId="activeNav"
@@ -108,9 +113,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 )}
               </AnimatePresence>
 
-              {/* Tooltip when collapsed */}
               {collapsed && (
-                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-800 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-slate-700 z-50">
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-800 dark:bg-slate-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-slate-700 z-50">
                   {item.label}
                   <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800" />
                 </div>
@@ -120,16 +124,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         })}
       </nav>
 
-      {/* Bottom section */}
-      <div className="px-2 pb-4 border-t border-slate-700/60 pt-3">
-        {/* Role badge */}
+      {/* Bottom */}
+      <div className="px-2 pb-4 border-t border-slate-700/60 dark:border-slate-800/60 pt-3">
         <AnimatePresence>
           {!collapsed && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mb-3 mx-0.5 px-3 py-2 bg-slate-800 rounded-xl"
+              className="mb-3 mx-0.5 px-3 py-2 bg-slate-800 dark:bg-slate-900 rounded-xl"
             >
               <p className="text-slate-400 text-xs">Logged in as</p>
               <p className="text-white text-sm font-semibold truncate">Super Admin</p>
@@ -137,10 +140,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </AnimatePresence>
 
-        {/* Collapse toggle */}
         <button
           onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-900 active:scale-95 transition-all duration-200"
         >
           {collapsed ? (
             <ChevronRightIcon className="w-4 h-4" />

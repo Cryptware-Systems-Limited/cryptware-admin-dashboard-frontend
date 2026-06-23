@@ -23,9 +23,9 @@ export default function Reports() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Bar chart */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="font-semibold text-slate-900 mb-1">Invoice Volume</h3>
-          <p className="text-xs text-slate-400 mb-5">Sent vs Paid vs Overdue per month</p>
+        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Invoice Volume</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-5">Sent vs Paid vs Overdue per month</p>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyData} barCategoryGap="35%">
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -40,9 +40,9 @@ export default function Reports() {
         </div>
 
         {/* Pie chart */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="font-semibold text-slate-900 mb-1">Invoice Status</h3>
-          <p className="text-xs text-slate-400 mb-4">Breakdown by current status</p>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Invoice Status</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">Breakdown by current status</p>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
@@ -59,9 +59,9 @@ export default function Reports() {
               <div key={item.name} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-slate-600">{item.name}</span>
+                  <span className="text-slate-600 dark:text-slate-400">{item.name}</span>
                 </div>
-                <span className="font-semibold text-slate-800">{item.value.toLocaleString()}</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{item.value.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -69,14 +69,14 @@ export default function Reports() {
       </div>
 
       {/* Export section */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-slate-900">Export Reports</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Download invoice and revenue reports</p>
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100">Export Reports</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Download invoice and revenue reports</p>
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 active:scale-95 transition-all">
+            <button className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-600 active:scale-95 transition-all">
               Export CSV
             </button>
             <button className="px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 active:scale-95 transition-all">

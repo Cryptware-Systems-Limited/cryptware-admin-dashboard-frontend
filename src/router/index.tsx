@@ -3,6 +3,7 @@ import DashboardLayout from "@/layouts/DashboardLayout";
 import Overview from "@/pages/Overview";
 import Reports from "@/pages/Reports";
 import Clients from "@/pages/Clients";
+import ClientProfile from "@/pages/ClientProfile";
 import GeographicCoverage from "@/pages/GeographicCoverage";
 import InvoiceMonitoring from "@/pages/InvoiceMonitoring";
 import NotFound from "@/pages/NotFound";
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "overview", element: <Overview /> },
       { path: "reports", element: <Reports /> },
       { path: "clients", element: <Clients /> },
+      { path: "clients/:id", element: <ClientProfile /> },
       { path: "geographic-coverage", element: <GeographicCoverage /> },
       { path: "invoice-monitoring", element: <InvoiceMonitoring /> },
     ],

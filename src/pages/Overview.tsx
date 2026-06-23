@@ -33,38 +33,37 @@ const recentActivity = [
 ];
 
 const statusColor: Record<string, string> = {
-  Paid: "bg-green-50 text-green-700",
-  Pending: "bg-yellow-50 text-yellow-700",
-  Overdue: "bg-red-50 text-red-600",
+  Paid: "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400",
+  Pending: "bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+  Overdue: "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400",
 };
 
 export default function Overview() {
   return (
     <div className="space-y-6">
       {/* Welcome banner */}
-      <div className="relative overflow-hidden rounded-xl border border-orange-200 bg-white">
-        {/* Left orange bar */}
+      <div className="relative overflow-hidden rounded-xl border border-orange-200 dark:border-orange-500/20 bg-white dark:bg-slate-900">
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-600" />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pl-6 pr-5 py-4">
           <div>
             <p className="text-xs font-semibold text-orange-600 uppercase tracking-widest mb-0.5">Admin Console</p>
-            <h2 className="text-lg font-bold text-slate-900">Good morning, Super Admin</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Here's a live summary of the Cryptware network.</p>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Good morning, Super Admin</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Here's a live summary of the Cryptware network.</p>
           </div>
           <div className="flex items-center gap-6 sm:gap-8 shrink-0">
             <div className="text-center">
-              <p className="text-xl font-bold text-slate-900">14</p>
-              <p className="text-xs text-slate-400 mt-0.5">Alerts</p>
+              <p className="text-xl font-bold text-slate-900 dark:text-slate-100">14</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Alerts</p>
             </div>
-            <div className="w-px h-8 bg-slate-200" />
+            <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
             <div className="text-center">
-              <p className="text-xl font-bold text-slate-900">3</p>
-              <p className="text-xs text-slate-400 mt-0.5">Overdue</p>
+              <p className="text-xl font-bold text-slate-900 dark:text-slate-100">3</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Overdue</p>
             </div>
-            <div className="w-px h-8 bg-slate-200" />
+            <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
             <div className="text-center">
               <p className="text-xl font-bold text-orange-600">₦2.1M</p>
-              <p className="text-xs text-slate-400 mt-0.5">Today</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Today</p>
             </div>
           </div>
         </div>
@@ -72,50 +71,22 @@ export default function Overview() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Clients"
-          value="2,841"
-          change="+12.4%"
-          positive
-          accent="navy"
-          icon={<UsersIcon className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Invoices This Month"
-          value="1,390"
-          change="+8.1%"
-          positive
-          accent="orange"
-          icon={<DocumentTextIcon className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Revenue (MTD)"
-          value="₦68.4M"
-          change="+5.3%"
-          positive
-          accent="green"
-          icon={<CurrencyDollarIcon className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Collection Rate"
-          value="91.2%"
-          change="-1.8%"
-          positive={false}
-          accent="yellow"
-          icon={<ArrowTrendingUpIcon className="w-5 h-5" />}
-        />
+        <StatCard label="Total Clients" value="2,841" change="+12.4%" positive accent="navy" icon={<UsersIcon className="w-5 h-5" />} />
+        <StatCard label="Invoices This Month" value="1,390" change="+8.1%" positive accent="orange" icon={<DocumentTextIcon className="w-5 h-5" />} />
+        <StatCard label="Revenue (MTD)" value="₦68.4M" change="+5.3%" positive accent="green" icon={<CurrencyDollarIcon className="w-5 h-5" />} />
+        <StatCard label="Collection Rate" value="91.2%" change="-1.8%" positive={false} accent="yellow" icon={<ArrowTrendingUpIcon className="w-5 h-5" />} />
       </div>
 
       {/* Charts + Activity */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Revenue chart */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="font-semibold text-slate-900">Revenue Trend</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Monthly revenue & invoice volume</p>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Revenue Trend</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Monthly revenue & invoice volume</p>
             </div>
-            <span className="text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1 rounded-full">2025</span>
+            <span className="text-xs font-medium text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-3 py-1 rounded-full">2025</span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={revenueData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -138,20 +109,20 @@ export default function Overview() {
         </div>
 
         {/* Recent activity */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-900">Recent Invoices</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100">Recent Invoices</h3>
             <button className="text-xs text-orange-600 font-medium hover:underline active:scale-95 transition-transform">View all</button>
           </div>
           <div className="space-y-3">
             {recentActivity.map((item) => (
               <div key={item.id} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 shrink-0">
                   <DocumentTextIcon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{item.client}</p>
-                  <p className="text-xs text-slate-400">{item.id} · {item.time}</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.client}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">{item.id} · {item.time}</p>
                 </div>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusColor[item.status]}`}>
                   {item.status}

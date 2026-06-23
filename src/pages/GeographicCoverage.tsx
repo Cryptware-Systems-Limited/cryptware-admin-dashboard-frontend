@@ -16,44 +16,42 @@ export default function GeographicCoverage() {
 
   return (
     <div className="space-y-5">
-      {/* Summary banner */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Active Regions", value: "8" },
           { label: "Total Clients", value: total.toLocaleString() },
           { label: "National Coverage", value: "62.4%" },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex items-center gap-4">
-            <div className="p-2.5 rounded-xl bg-slate-900 text-white">
+          <div key={s.label} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm px-5 py-4 flex items-center gap-4">
+            <div className="p-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white">
               <GlobeAltIcon className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{s.value}</p>
-              <p className="text-xs text-slate-500">{s.label}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{s.value}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{s.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Region breakdown */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <h3 className="font-semibold text-slate-900 mb-4">Regional Breakdown</h3>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Regional Breakdown</h3>
         <div className="space-y-4">
           {regions.map((region) => (
             <div key={region.name}>
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-3">
-                  <span className="font-medium text-slate-800 text-sm">{region.name}</span>
-                  <span className="text-xs text-slate-400">{region.clients} clients · {region.invoices} invoices</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200 text-sm">{region.name}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">{region.clients} clients · {region.invoices} invoices</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-slate-700">{region.revenue}</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{region.revenue}</span>
                   <span className="text-xs font-bold text-orange-600 w-10 text-right">{region.coverage}%</span>
                 </div>
               </div>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-slate-800 to-orange-600 transition-all duration-700"
+                  className="h-full rounded-full bg-gradient-to-r from-slate-800 dark:from-slate-600 to-orange-600 transition-all duration-700"
                   style={{ width: `${region.coverage}%` }}
                 />
               </div>

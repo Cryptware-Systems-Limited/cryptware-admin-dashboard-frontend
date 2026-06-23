@@ -21,6 +21,11 @@
     color: rgb(15 23 42);
     min-height: 100vh;
     margin: 0;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .dark body {
+    background-color: rgb(2 6 23);
+    color: rgb(241 245 249);
   }
   button {
     cursor: pointer;
@@ -33,4 +38,6 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgb(148 163 184); border-radius: 9999px; }
   ::-webkit-scrollbar-thumb:hover { background: rgb(100 116 139); }
+  .dark ::-webkit-scrollbar-thumb { background: rgb(71 85 105); }
+  .dark ::-webkit-scrollbar-thumb:hover { background: rgb(100 116 139); }
 }
