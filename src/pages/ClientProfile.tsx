@@ -12,9 +12,12 @@ import {
   XMarkIcon,
   MapPinIcon,
   TagIcon,
+  LockClosedIcon,
 } from "@heroicons/react/24/outline";
 import { MOCK_CLIENTS, type Client, type ProjectStatus, type RAGStatus } from "@/data/clients";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const AVATAR_COLORS: [string, string][] = [
@@ -103,25 +106,31 @@ function Field({ label, value, nrs, children }: {
   );
 }
 
-function EditableNote({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function EditableNote({ value, onSave, readOnly = false }: {
+  value: string;
+  onSave: (v: string) => void;
+  readOnly?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
   function save() { onSave(draft); setEditing(false); }
   function cancel() { setDraft(value); setEditing(false); }
 
-  if (!editing) {
+  if (readOnly || !editing) {
     return (
       <div className="flex items-start gap-2 group">
         <p className="text-sm text-slate-700 dark:text-slate-300 flex-1 leading-relaxed">
           {value || <span className="text-slate-300 dark:text-slate-600">No notes</span>}
         </p>
-        <button
-          onClick={() => setEditing(true)}
-          className="shrink-0 p-1.5 rounded-md text-slate-300 dark:text-slate-600 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10 transition-colors opacity-0 group-hover:opacity-100"
-        >
-          <PencilIcon className="w-3.5 h-3.5" />
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setEditing(true)}
+            className="shrink-0 p-1.5 rounded-md text-slate-300 dark:text-slate-600 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <PencilIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     );
   }
@@ -151,9 +160,12 @@ function EditableNote({ value, onSave }: { value: string; onSave: (v: string) =>
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { canWrite, canSuspend } = useAuth();
 
   const original = MOCK_CLIENTS.find((c) => c.id === id);
   const [client, setClient] = useState<Client | undefined>(original);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (!client) {
     return (
@@ -406,77 +418,137 @@ export default function ClientProfile() {
 
       {/* ── Section 5: Admin Controls ── */}
       <SectionCard title="Admin Controls" icon={<ShieldExclamationIcon className="w-4 h-4" />} accent="red">
-        {/* Editable status dropdowns */}
+
+        {/* Viewer notice */}
+        {!canWrite && (
+          <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs">
+            <LockClosedIcon className="w-3.5 h-3.5 shrink-0" />
+            You have view-only access. Contact a System Admin to make changes.
+          </div>
+        )}
+
+        {/* Status dropdowns */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mb-5">
           <Field label="Project Status">
-            <select
-              value={client.projectStatus}
-              onChange={(e) => setClient((c) => c && { ...c, projectStatus: e.target.value as ProjectStatus })}
-              className="mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer w-full"
-            >
-              <option value="Live">Live</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Blocked">Blocked</option>
-              <option value="Not Started">Not Started</option>
-            </select>
+            {canWrite ? (
+              <select
+                value={client.projectStatus}
+                onChange={(e) => setClient((c) => c && { ...c, projectStatus: e.target.value as ProjectStatus })}
+                className="mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer w-full"
+              >
+                <option value="Live">Live</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Not Started">Not Started</option>
+              </select>
+            ) : (
+              <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full inline-block mt-0.5", STATUS_BADGE[client.projectStatus])}>
+                {client.projectStatus}
+              </span>
+            )}
           </Field>
           <Field label="RAG Status">
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", rag.dot)} />
-              <select
-                value={client.ragStatus}
-                onChange={(e) => setClient((c) => c && { ...c, ragStatus: e.target.value as RAGStatus })}
-                className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer flex-1"
-              >
-                <option value="GREEN">Green — On Track</option>
-                <option value="AMBER">Amber — At Risk</option>
-                <option value="RED">Red — Critical</option>
-                <option value="PENDING">Pending — No Kickoff</option>
-              </select>
-            </div>
+            {canWrite ? (
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", rag.dot)} />
+                <select
+                  value={client.ragStatus}
+                  onChange={(e) => setClient((c) => c && { ...c, ragStatus: e.target.value as RAGStatus })}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer flex-1"
+                >
+                  <option value="GREEN">Green — On Track</option>
+                  <option value="AMBER">Amber — At Risk</option>
+                  <option value="RED">Red — Critical</option>
+                  <option value="PENDING">Pending — No Kickoff</option>
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", rag.dot)} />
+                <span className={cn("text-sm font-semibold", rag.text)}>{rag.label}</span>
+              </div>
+            )}
           </Field>
         </div>
 
-        {/* Editable implementation notes */}
+        {/* Implementation notes */}
         <Field label="Implementation Notes">
           <div className="mt-1.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
             <EditableNote
               value={client.activityNote}
+              readOnly={!canWrite}
               onSave={(note) => setClient((c) => c && { ...c, activityNote: note })}
             />
           </div>
         </Field>
 
-        {/* Suspend / Reactivate */}
-        <div className="flex flex-wrap items-center gap-3 mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
-          {isSuspended ? (
-            <button
-              onClick={() => setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Active" } })}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 active:scale-95 transition-all shadow-sm shadow-emerald-600/20"
-            >
-              Reactivate Client
-            </button>
-          ) : (
-            <button
-              onClick={() => setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Suspended" } })}
-              className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all shadow-sm shadow-red-600/20"
-            >
-              Suspend Client
-            </button>
-          )}
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            {isSuspended
-              ? "Client is suspended. Reactivating restores all platform access."
-              : "Suspending blocks all logins and API access for this organisation."}
-          </p>
-        </div>
+        {/* Suspend / Reactivate — SYSTEM_ADMIN only */}
+        {canSuspend && (
+          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-3">
+            {actionError && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-xs">
+                <ShieldExclamationIcon className="w-3.5 h-3.5 shrink-0" />
+                {actionError}
+              </div>
+            )}
 
-        {isSuspended && (
-          <div className="mt-4 flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
-            <ShieldExclamationIcon className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-700 dark:text-red-400">
-              This client is currently <strong>suspended</strong>. All users receive a 403 on login with instructions to contact <span className="font-mono">support@cryptwaresystems.com</span>.
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {isSuspended ? (
+                <button
+                  disabled={actionLoading}
+                  onClick={async () => {
+                    setActionLoading(true);
+                    setActionError(null);
+                    try {
+                      await api.post(`/admin/organizations/${id}/activate`);
+                      setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Active" } });
+                    } catch (err: unknown) {
+                      const message = err instanceof Error ? err.message : "Failed to activate client";
+                      setActionError(message);
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 active:scale-95 transition-all shadow-sm shadow-emerald-600/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                >
+                  {actionLoading ? "Activating…" : "Reactivate Client"}
+                </button>
+              ) : (
+                <button
+                  disabled={actionLoading}
+                  onClick={async () => {
+                    setActionLoading(true);
+                    setActionError(null);
+                    try {
+                      await api.post(`/admin/organizations/${id}/suspend`);
+                      setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Suspended" } });
+                    } catch (err: unknown) {
+                      const message = err instanceof Error ? err.message : "Failed to suspend client";
+                      setActionError(message);
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all shadow-sm shadow-red-600/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                >
+                  {actionLoading ? "Suspending…" : "Suspend Client"}
+                </button>
+              )}
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {isSuspended
+                  ? "Client is suspended. Reactivating restores all platform access."
+                  : "Suspending blocks all logins and API access for this organisation."}
+              </p>
+            </div>
+
+            {isSuspended && (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                <ShieldExclamationIcon className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-700 dark:text-red-400">
+                  This client is currently <strong>suspended</strong>. All users receive a 403 on login with instructions to contact <span className="font-mono">support@cryptwaresystems.com</span>.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </SectionCard>
