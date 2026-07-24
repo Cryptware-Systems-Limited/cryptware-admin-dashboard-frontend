@@ -19,8 +19,9 @@ export interface PlatformActivity {
   firstInvoiceDate: string | null;
   lastInvoiceDate: string | null;
   onboardingDate: string;
-  accountStatus: AccountStatus;
+  accountStatus: AccountStatus | "Inactive Warning";
   lastLoginDate: string | null;
+  linkedOrganizationId?: string | null;
 }
 
 export interface Client {

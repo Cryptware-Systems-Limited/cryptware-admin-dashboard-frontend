@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import StatCard from "@/components/ui/StatCard";
 import {
   UsersIcon,
@@ -6,6 +7,10 @@ import {
   CalendarDaysIcon,
   ExclamationTriangleIcon,
   BuildingOfficeIcon,
+  MagnifyingGlassIcon,
+  ArrowRightIcon,
+  NoSymbolIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import {
   AreaChart,
@@ -71,6 +76,171 @@ function formatDate(iso: string | null) {
 function Skeleton({ className }: { className?: string }) {
   return (
     <div className={cn("animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700", className)} />
+  );
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface SearchResult {
+  id: string;
+  businessName: string;
+  tin: string;
+  email: string;
+  status: "Active" | "Suspended" | "Inactive Warning";
+}
+
+interface SearchResponse {
+  status: string;
+  data: { clients: SearchResult[] };
+}
+
+// ── Quick Actions Search ───────────────────────────────────────────────────────
+function ClientSearch() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = useCallback((q: string) => {
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    setSearching(true);
+    api.get<SearchResponse>(`/admin/clients/onboarded?search=${encodeURIComponent(q.trim())}&limit=6`)
+      .then((res) => { setResults(res.data.clients); setOpen(true); })
+      .catch(() => setResults([]))
+      .finally(() => setSearching(false));
+  }, []);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setQuery(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => search(val), 300);
+  }
+
+  function handleSelect(id: string) {
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+    navigate(`/clients/${id}`);
+  }
+
+  async function handleRetry() {
+    setRetrying(true);
+    setRetryMsg(null);
+    try {
+      await api.post("/admin/invoices/retry-failed");
+      setRetryMsg("Retry triggered successfully.");
+    } catch {
+      setRetryMsg("Retry failed — check backend logs.");
+    } finally {
+      setRetrying(false);
+      setTimeout(() => setRetryMsg(null), 4000);
+    }
+  }
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const STATUS_DOT: Record<string, string> = {
+    Active: "bg-emerald-500",
+    Suspended: "bg-red-500",
+    "Inactive Warning": "bg-amber-400",
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+      <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Quick Actions</h3>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+
+        {/* Search */}
+        <div ref={wrapperRef} className="relative flex-1">
+          <div className="relative">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            {searching && (
+              <ArrowPathIcon className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />
+            )}
+            <input
+              type="text"
+              value={query}
+              onChange={handleChange}
+              onFocus={() => results.length > 0 && setOpen(true)}
+              placeholder="Search client by name or TIN…"
+              className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
+            />
+          </div>
+
+          {/* Dropdown */}
+          {open && results.length > 0 && (
+            <div className="absolute z-50 top-full mt-1.5 left-0 right-0 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+              {results.map((r, i) => (
+                <button
+                  key={r.id}
+                  onMouseDown={() => handleSelect(r.id)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition",
+                    i > 0 && "border-t border-slate-100 dark:border-slate-800"
+                  )}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0">
+                    <BuildingOfficeIcon className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{r.businessName}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">{r.tin}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[r.status] ?? "bg-slate-400")} />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{r.status}</span>
+                  </div>
+                  <ArrowRightIcon className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {open && query.trim() && results.length === 0 && !searching && (
+            <div className="absolute z-50 top-full mt-1.5 left-0 right-0 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl px-4 py-3 text-sm text-slate-400 dark:text-slate-500">
+              No clients found for "{query}"
+            </div>
+          )}
+        </div>
+
+        {/* View Suspended */}
+        <button
+          onClick={() => navigate("/clients?status=Suspended")}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-red-300 dark:hover:border-red-500/40 hover:text-red-600 dark:hover:text-red-400 transition whitespace-nowrap"
+        >
+          <NoSymbolIcon className="w-4 h-4" />
+          Suspended Clients
+        </button>
+
+        {/* Manual Retry */}
+        <button
+          onClick={handleRetry}
+          disabled={retrying}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition whitespace-nowrap disabled:opacity-50"
+        >
+          <ArrowPathIcon className={cn("w-4 h-4", retrying && "animate-spin")} />
+          {retrying ? "Retrying…" : "Retry Failed Invoices"}
+        </button>
+      </div>
+
+      {retryMsg && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{retryMsg}</p>
+      )}
+    </div>
   );
 }
 
@@ -180,6 +350,9 @@ export default function Overview() {
           </>
         )}
       </div>
+
+      {/* Quick Actions */}
+      <ClientSearch />
 
       {/* Charts + Activity */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

@@ -1,12 +1,16 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { api } from "@/lib/api";
 import {
   MagnifyingGlassIcon,
   ChevronUpDownIcon,
   ChevronUpIcon,
   ChevronDownIcon,
   PlusIcon,
+  PencilSquareIcon,
 } from "@heroicons/react/24/outline";
+import EditCrmClientModal from "@/components/crm/EditCrmClientModal";
+import AddCrmClientModal from "@/components/crm/AddCrmClientModal";
 import {
   Table,
   TableHeader,
@@ -15,13 +19,73 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { MOCK_CLIENTS, type Client, type ProjectStatus, type RAGStatus, type ServiceType } from "@/data/clients";
+import { type Client, type ProjectStatus, type RAGStatus, type ServiceType } from "@/data/clients";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortField = "name" | "erpSystem" | "projectStatus" | "ragStatus";
 type SortDir = "asc" | "desc";
-type ActiveTab = "master" | "migration";
+type ActiveTab = "master" | "migration" | "onboarded";
+type OnboardedStatus = "Active" | "Suspended" | "Inactive Warning";
+
+type ServiceCategory = "DASHBOARD" | "ERP" | "BOTH";
+type CredentialEnvironment = "TEST" | "PROD" | "BOTH";
+
+interface OnboardedClient {
+  id: string;
+  businessName: string;
+  tin: string;
+  email: string;
+  sector: string | null;
+  status: OnboardedStatus;
+  onboardingDate: string;
+  lastApiActivity: string | null;
+  activeApiKeys: number;
+  totalApiKeys: number;
+  totalInvoices: number;
+  serviceCategory: ServiceCategory;
+  credentialEnvironment: CredentialEnvironment;
+}
+
+interface OnboardedStats {
+  total: number;
+  active: number;
+  suspended: number;
+  inactiveWarning: number;
+}
+
+interface OnboardedResponse {
+  status: string;
+  data: {
+    stats: OnboardedStats;
+    clients: OnboardedClient[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  };
+}
+
+interface CrmStats {
+  total: number;
+  live: number;
+  inProgress: number;
+  blocked: number;
+  notStarted: number;
+  ragCounts: Record<RAGStatus, number>;
+  migration: {
+    live: number;
+    credentialsReady: number;
+    meetingArranged: number;
+    pending: number;
+  };
+}
+
+interface CrmResponse {
+  status: string;
+  data: {
+    clients: Client[];
+    stats: CrmStats;
+    pagination: { total: number; page: number; limit: number; pages: number };
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const AVATAR_COLORS: [string, string][] = [
@@ -68,6 +132,45 @@ const SERVICE_BADGE: Record<ServiceType, string> = {
   "Combined":        "bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20",
 };
 
+const ONBOARDED_STATUS_BADGE: Record<OnboardedStatus, string> = {
+  "Active":           "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20",
+  "Suspended":        "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20",
+  "Inactive Warning": "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20",
+};
+
+const ONBOARDED_STATUS_DOT: Record<OnboardedStatus, string> = {
+  "Active":           "bg-emerald-500",
+  "Suspended":        "bg-red-500",
+  "Inactive Warning": "bg-amber-400",
+};
+
+const SERVICE_CATEGORY_BADGE: Record<ServiceCategory, string> = {
+  DASHBOARD: "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20",
+  ERP:       "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20",
+  BOTH:      "bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20",
+};
+
+const SERVICE_CATEGORY_LABEL: Record<ServiceCategory, string> = {
+  DASHBOARD: "Dashboard",
+  ERP:       "ERP",
+  BOTH:      "Dashboard + ERP",
+};
+
+const CRED_ENV_BADGE: Record<CredentialEnvironment, string> = {
+  TEST: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
+  PROD: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20",
+  BOTH: "bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20",
+};
+
+function formatDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700", className)} />;
+}
+
 function SortIcon({ field, active, dir }: { field: SortField; active: SortField; dir: SortDir }) {
   if (field !== active) return <ChevronUpDownIcon className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1 inline" />;
   return dir === "asc"
@@ -78,44 +181,154 @@ function SortIcon({ field, active, dir }: { field: SortField; active: SortField;
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Clients() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "All">("All");
   const [serviceFilter, setServiceFilter] = useState<ServiceType | "All">("All");
   const [ragFilter, setRagFilter] = useState<RAGStatus | "All">("All");
+  const [erpFilter, setErpFilter] = useState<string>("All");
+  const [locationFilter, setLocationFilter] = useState<string>("All");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("master");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
+    searchParams.get("status") ? "onboarded" : "master"
+  );
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
-  const total      = MOCK_CLIENTS.length;
-  const live       = MOCK_CLIENTS.filter((c) => c.projectStatus === "Live").length;
-  const inProgress = MOCK_CLIENTS.filter((c) => c.projectStatus === "In Progress").length;
-  const blocked    = MOCK_CLIENTS.filter((c) => c.projectStatus === "Blocked").length;
-  const notStarted = MOCK_CLIENTS.filter((c) => c.projectStatus === "Not Started").length;
+  // ── Dashboard Migration state ──────────────────────────────────────────────
+  const [migSearch, setMigSearch] = useState("");
+  const [migCredFilter, setMigCredFilter] = useState<"All" | "Yes" | "No">("All");
+  const [migMeetingFilter, setMigMeetingFilter] = useState<"All" | "Yes" | "No" | "Sent Guidelines">("All");
+
+  // ── CRM Clients state ─────────────────────────────────────────────────────
+  const [crmClients, setCrmClients] = useState<Client[]>([]);
+  const [crmStats, setCrmStats] = useState<CrmStats | null>(null);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const [crmError, setCrmError] = useState<string | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [addClientOpen, setAddClientOpen] = useState(false);
+
+  const fetchCrm = useCallback(async () => {
+    setCrmLoading(true);
+    setCrmError(null);
+    try {
+      const res = await api.get<CrmResponse>("/admin/crm/clients?limit=200");
+      setCrmClients(res.data.clients);
+      setCrmStats(res.data.stats);
+    } catch (err) {
+      setCrmError(err instanceof Error ? err.message : "Failed to load CRM clients");
+    } finally {
+      setCrmLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCrm();
+  }, [fetchCrm]);
+
+  // ── Onboarded Clients state ────────────────────────────────────────────────
+  const [onboardedClients, setOnboardedClients] = useState<OnboardedClient[]>([]);
+  const [onboardedStats, setOnboardedStats] = useState<OnboardedStats | null>(null);
+  const [onboardedPagination, setOnboardedPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [onboardedSearch, setOnboardedSearch] = useState("");
+  const [onboardedStatusFilter, setOnboardedStatusFilter] = useState<OnboardedStatus | "All">(() => {
+    const s = searchParams.get("status");
+    if (s === "Suspended") return "Suspended";
+    if (s === "warning") return "Inactive Warning";
+    return "All";
+  });
+  const [onboardedPage, setOnboardedPage] = useState(1);
+  const [onboardedLoading, setOnboardedLoading] = useState(false);
+  const [onboardedError, setOnboardedError] = useState<string | null>(null);
+  const [invoiceActivityFilter, setInvoiceActivityFilter] = useState<string>("All");
+  const [onboardedFrom, setOnboardedFrom] = useState<string>("");
+  const [onboardedTo, setOnboardedTo] = useState<string>("");
+
+  const fetchOnboarded = useCallback(async (
+    search: string,
+    status: string,
+    page: number,
+    invoiceActivity: string,
+    dateFrom: string,
+    dateTo: string,
+  ) => {
+    setOnboardedLoading(true);
+    setOnboardedError(null);
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (search.trim()) params.set("search", search.trim());
+      if (status !== "All") params.set("status", status.toLowerCase().replace(/ /g, "_").replace("inactive_warning", "warning"));
+      if (invoiceActivity !== "All") params.set("invoiceActivity", invoiceActivity);
+      if (dateFrom) params.set("onboardedFrom", dateFrom);
+      if (dateTo) params.set("onboardedTo", dateTo);
+      const res = await api.get<OnboardedResponse>(`/admin/clients/onboarded?${params.toString()}`);
+      setOnboardedClients(res.data.clients);
+      setOnboardedStats(res.data.stats);
+      setOnboardedPagination(res.data.pagination);
+    } catch (err) {
+      setOnboardedError(err instanceof Error ? err.message : "Failed to load onboarded clients");
+    } finally {
+      setOnboardedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "onboarded") {
+      fetchOnboarded(onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, onboardedFrom, onboardedTo);
+    }
+  }, [activeTab, onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, onboardedFrom, onboardedTo, fetchOnboarded]);
+
+  // ── Stats (from API) ───────────────────────────────────────────────────────
+  const total      = crmStats?.total ?? 0;
+  const live       = crmStats?.live ?? 0;
+  const inProgress = crmStats?.inProgress ?? 0;
+  const blocked    = crmStats?.blocked ?? 0;
+  const notStarted = crmStats?.notStarted ?? 0;
 
   const ragCounts: Record<RAGStatus, number> = {
-    GREEN:   MOCK_CLIENTS.filter((c) => c.ragStatus === "GREEN").length,
-    AMBER:   MOCK_CLIENTS.filter((c) => c.ragStatus === "AMBER").length,
-    RED:     MOCK_CLIENTS.filter((c) => c.ragStatus === "RED").length,
-    PENDING: MOCK_CLIENTS.filter((c) => c.ragStatus === "PENDING").length,
+    GREEN:   crmStats?.ragCounts.GREEN   ?? 0,
+    AMBER:   crmStats?.ragCounts.AMBER   ?? 0,
+    RED:     crmStats?.ragCounts.RED     ?? 0,
+    PENDING: crmStats?.ragCounts.PENDING ?? 0,
   };
+
+  // ── Migration stats & filtered list (Dashboard-service clients only) ────────
+  const dashboardClients = useMemo(
+    () => crmClients.filter(c => c.serviceTypes.includes("Dashboard")),
+    [crmClients],
+  );
+
+  const migTotal           = dashboardClients.length;
+  const migLive            = dashboardClients.filter(c => c.dashboardMigration.statusNote === "LIVE").length;
+  const migCredReady       = dashboardClients.filter(c => c.dashboardMigration.credentialsCreated).length;
+  const migMeetingArranged = dashboardClients.filter(c => c.dashboardMigration.scheduledMeeting === "Yes").length;
+  const migPending         = migTotal - migLive;
+
+  const migFiltered = useMemo(() => {
+    let list = dashboardClients;
+    if (migSearch.trim()) list = list.filter(c => c.name.toLowerCase().includes(migSearch.toLowerCase()));
+    if (migCredFilter !== "All") list = list.filter(c => migCredFilter === "Yes" ? c.dashboardMigration.credentialsCreated : !c.dashboardMigration.credentialsCreated);
+    if (migMeetingFilter !== "All") list = list.filter(c => c.dashboardMigration.scheduledMeeting === migMeetingFilter);
+    return list;
+  }, [dashboardClients, migSearch, migCredFilter, migMeetingFilter]);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo<Client[]>(() => {
-    let list = MOCK_CLIENTS;
+    let list = crmClients;
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q) || c.tin.includes(q));
     }
-    if (statusFilter !== "All")  list = list.filter((c) => c.projectStatus === statusFilter);
-    if (serviceFilter !== "All") list = list.filter((c) => c.serviceTypes.includes(serviceFilter));
-    if (ragFilter !== "All")     list = list.filter((c) => c.ragStatus === ragFilter);
+    if (statusFilter !== "All")   list = list.filter((c) => c.projectStatus === statusFilter);
+    if (serviceFilter !== "All")  list = list.filter((c) => c.serviceTypes.includes(serviceFilter as ServiceType));
+    if (ragFilter !== "All")      list = list.filter((c) => c.ragStatus === ragFilter);
+    if (erpFilter !== "All")      list = list.filter((c) => c.erpSystem.toLowerCase().includes(erpFilter.toLowerCase()));
+    if (locationFilter !== "All") list = list.filter((c) => c.zone === locationFilter);
     return [...list].sort((a, b) => {
       const cmp = String(a[sortField] ?? "").localeCompare(String(b[sortField] ?? ""));
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [search, statusFilter, serviceFilter, ragFilter, sortField, sortDir]);
+  }, [crmClients, search, statusFilter, serviceFilter, ragFilter, erpFilter, locationFilter, sortField, sortDir]);
 
   function handleSort(f: SortField) {
     if (sortField === f) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -131,10 +344,13 @@ export default function Clients() {
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Client Monitor</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {total} clients across all implementation stages
+            {crmLoading ? "Loading…" : `${total} clients across all implementation stages`}
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 active:scale-95 transition-all shadow-sm shadow-orange-600/20">
+        <button
+          onClick={() => setAddClientOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 active:scale-95 transition-all shadow-sm shadow-orange-600/20"
+        >
           <PlusIcon className="w-4 h-4" />
           Add Client
         </button>
@@ -224,78 +440,114 @@ export default function Clients() {
 
       {/* ── Tabs ── */}
       <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
-        {(["master", "migration"] as ActiveTab[]).map((tab) => (
+        {([
+          { id: "master",    label: "Client Master List" },
+          { id: "migration", label: "Dashboard Migration" },
+          { id: "onboarded", label: "Onboarded Clients" },
+        ] as { id: ActiveTab; label: string }[]).map(({ id, label }) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={id}
+            onClick={() => setActiveTab(id)}
             className={cn(
               "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
-              activeTab === tab
+              activeTab === id
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
-            {tab === "master" ? "Client Master List" : "Dashboard Migration"}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* ── Filters ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <div className="relative flex-1 min-w-48 max-w-sm">
-          <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search by name or TIN…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
-          />
-        </div>
-
-        {/* Status filter */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as ProjectStatus | "All")}
-          className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
-        >
-          <option value="All">All Statuses</option>
-          <option value="Live">Live</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Blocked">Blocked</option>
-          <option value="Not Started">Not Started</option>
-        </select>
-
-        {/* Service filter */}
-        <select
-          value={serviceFilter}
-          onChange={(e) => setServiceFilter(e.target.value as ServiceType | "All")}
-          className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
-        >
-          <option value="All">All Services</option>
-          <option value="Dashboard">Dashboard</option>
-          <option value="ERP Support">ERP Support</option>
-          <option value="ERP End-to-End">ERP End-to-End</option>
-          <option value="Combined">Combined</option>
-        </select>
-
-        {(statusFilter !== "All" || serviceFilter !== "All" || ragFilter !== "All" || search) && (
-          <button
-            onClick={() => { setSearch(""); setStatusFilter("All"); setServiceFilter("All"); setRagFilter("All"); }}
-            className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
-          >
-            Clear all
-          </button>
-        )}
-
-        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 font-medium">
-          {filtered.length} of {total}
-        </span>
-      </div>
-
       {/* ── Master List Table ── */}
       {activeTab === "master" && (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-48 max-w-sm">
+              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search by name or TIN…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as ProjectStatus | "All")}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Live">Live</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Blocked">Blocked</option>
+              <option value="Not Started">Not Started</option>
+            </select>
+
+            <select
+              value={serviceFilter}
+              onChange={(e) => setServiceFilter(e.target.value as ServiceType | "All")}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Services</option>
+              <option value="Dashboard">Dashboard</option>
+              <option value="ERP Support">ERP Support</option>
+              <option value="ERP End-to-End">ERP End-to-End</option>
+              <option value="Combined">Combined</option>
+            </select>
+
+            <select
+              value={erpFilter}
+              onChange={(e) => setErpFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All ERPs</option>
+              <option value="SAP">SAP</option>
+              <option value="Oracle">Oracle</option>
+              <option value="MS Dynamics">MS Dynamics</option>
+              <option value="Sage">Sage</option>
+              <option value="QuickBooks">QuickBooks</option>
+              <option value="TALLY">TALLY</option>
+              <option value="None">None</option>
+            </select>
+
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Zones</option>
+              <option value="South West">South West</option>
+              <option value="South South">South South</option>
+              <option value="South East">South East</option>
+              <option value="North West">North West</option>
+              <option value="North East">North East</option>
+              <option value="North Central">North Central</option>
+            </select>
+
+            {(statusFilter !== "All" || serviceFilter !== "All" || ragFilter !== "All" || erpFilter !== "All" || locationFilter !== "All" || search) && (
+              <button
+                onClick={() => { setSearch(""); setStatusFilter("All"); setServiceFilter("All"); setRagFilter("All"); setErpFilter("All"); setLocationFilter("All"); }}
+                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
+              >
+                Clear all
+              </button>
+            )}
+
+            <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 font-medium">
+              {filtered.length} of {total}
+            </span>
+          </div>
+
+          {crmError && (
+            <div className="rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+              {crmError}
+            </div>
+          )}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <Table className="[&_td]:align-top">
             <TableHeader className="bg-slate-50 dark:bg-slate-800/60">
@@ -318,7 +570,19 @@ export default function Clients() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {crmLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
+                    <TableCell><Skeleton className="h-9 w-44" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell />
+                  </TableRow>
+                ))
+              ) : filtered.length === 0 ? (
                 <TableRow className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
                   <TableCell colSpan={7} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
                     No clients match the current filters.
@@ -392,11 +656,15 @@ export default function Clients() {
                       </p>
                     </TableCell>
 
-                    {/* Arrow */}
+                    {/* Edit */}
                     <TableCell className="text-right">
-                      <span className="text-xs text-orange-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                        →
-                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingClient(client); }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10 transition opacity-0 group-hover:opacity-100"
+                        title="Edit CRM record"
+                      >
+                        <PencilSquareIcon className="w-4 h-4" />
+                      </button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -404,93 +672,505 @@ export default function Clients() {
             </TableBody>
           </Table>
         </div>
+        </>
+      )}
+
+      {/* ── Onboarded Clients (API) ── */}
+      {activeTab === "onboarded" && (
+        <div className="space-y-4">
+          {/* Stats */}
+          {onboardedStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Total Onboarded", value: onboardedStats.total,          color: "border-t-slate-400",   textColor: "text-slate-600 dark:text-slate-400",    numColor: "text-slate-900 dark:text-slate-100" },
+                { label: "Active",          value: onboardedStats.active,          color: "border-t-emerald-500", textColor: "text-emerald-600 dark:text-emerald-400", numColor: "text-emerald-700 dark:text-emerald-400" },
+                { label: "Inactive Warning",value: onboardedStats.inactiveWarning, color: "border-t-amber-400",   textColor: "text-amber-600 dark:text-amber-400",     numColor: "text-amber-700 dark:text-amber-400" },
+                { label: "Suspended",       value: onboardedStats.suspended,       color: "border-t-red-500",     textColor: "text-red-600 dark:text-red-400",         numColor: "text-red-700 dark:text-red-400" },
+              ].map((card) => (
+                <div
+                  key={card.label}
+                  className={cn(
+                    "bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm border-t-[3px]",
+                    card.color
+                  )}
+                >
+                  <p className={cn("text-3xl font-black tracking-tight", card.numColor)}>{card.value}</p>
+                  <p className={cn("text-xs font-medium mt-1", card.textColor)}>{card.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-48 max-w-sm">
+              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search by name or TIN…"
+                value={onboardedSearch}
+                onChange={(e) => { setOnboardedSearch(e.target.value); setOnboardedPage(1); }}
+                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
+              />
+            </div>
+
+            <select
+              value={onboardedStatusFilter}
+              onChange={(e) => { setOnboardedStatusFilter(e.target.value as OnboardedStatus | "All"); setOnboardedPage(1); }}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive Warning">Inactive Warning</option>
+              <option value="Suspended">Suspended</option>
+              <option value="Deleted">Deleted</option>
+            </select>
+
+            <select
+              value={invoiceActivityFilter}
+              onChange={(e) => { setInvoiceActivityFilter(e.target.value); setOnboardedPage(1); }}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Activity</option>
+              <option value="no_activity">No Activity</option>
+              <option value="today">Active Today</option>
+              <option value="last_7_days">Active Last 7 Days</option>
+              <option value="last_30_days">Active Last 30 Days</option>
+            </select>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={onboardedFrom}
+                onChange={(e) => { setOnboardedFrom(e.target.value); setOnboardedPage(1); }}
+                className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
+              />
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="date"
+                value={onboardedTo}
+                onChange={(e) => { setOnboardedTo(e.target.value); setOnboardedPage(1); }}
+                className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
+              />
+            </div>
+
+            {(onboardedSearch || onboardedStatusFilter !== "All" || invoiceActivityFilter !== "All" || onboardedFrom || onboardedTo) && (
+              <button
+                onClick={() => { setOnboardedSearch(""); setOnboardedStatusFilter("All"); setInvoiceActivityFilter("All"); setOnboardedFrom(""); setOnboardedTo(""); setOnboardedPage(1); }}
+                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
+              >
+                Clear all
+              </button>
+            )}
+            <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 font-medium">
+              {onboardedPagination.total} total
+            </span>
+          </div>
+
+          {/* Error */}
+          {onboardedError && (
+            <div className="rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+              {onboardedError}
+            </div>
+          )}
+
+          {/* Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <Table>
+              <TableHeader className="bg-slate-50 dark:bg-slate-800/60">
+                <TableRow className="hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-default">
+                  <TableHead>Organisation / TIN</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Sector</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Environment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Onboarded</TableHead>
+                  <TableHead>Last API Activity</TableHead>
+                  <TableHead className="text-center">API Keys</TableHead>
+                  <TableHead className="text-center">Invoices</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {onboardedLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i} className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
+                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-36" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : onboardedClients.length === 0 ? (
+                  <TableRow className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
+                    <TableCell colSpan={10} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+                      No onboarded clients match the current filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  onboardedClients.map((client) => (
+                    <TableRow key={client.id} onClick={() => navigate(`/clients/${client.id}`)}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm"
+                            style={avatarGradient(client.businessName)}
+                          >
+                            {client.businessName[0]}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm leading-tight">{client.businessName}</p>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">{client.tin}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600 dark:text-slate-400">{client.email}</TableCell>
+                      <TableCell>
+                        {client.sector ? (
+                          <span className="text-xs text-slate-600 dark:text-slate-400">{client.sector}</span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {client.serviceCategory && (
+                          <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", SERVICE_CATEGORY_BADGE[client.serviceCategory])}>
+                            {SERVICE_CATEGORY_LABEL[client.serviceCategory]}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {client.credentialEnvironment && (
+                          <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", CRED_ENV_BADGE[client.credentialEnvironment])}>
+                            {client.credentialEnvironment}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn("inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full", ONBOARDED_STATUS_BADGE[client.status])}>
+                          <span className={cn("w-1.5 h-1.5 rounded-full", ONBOARDED_STATUS_DOT[client.status])} />
+                          {client.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
+                        {formatDate(client.onboardingDate)}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
+                        {formatDate(client.lastApiActivity)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          {client.activeApiKeys}
+                          <span className="font-normal text-slate-400 dark:text-slate-500">/{client.totalApiKeys}</span>
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {client.totalInvoices.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination */}
+          {onboardedPagination.totalPages > 1 && (
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Page {onboardedPagination.page} of {onboardedPagination.totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOnboardedPage((p) => Math.max(1, p - 1))}
+                  disabled={onboardedPage <= 1}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setOnboardedPage((p) => Math.min(onboardedPagination.totalPages, p + 1))}
+                  disabled={onboardedPage >= onboardedPagination.totalPages}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Modals ── */}
+      {editingClient && (
+        <EditCrmClientModal
+          client={editingClient}
+          onClose={() => setEditingClient(null)}
+          onSaved={(updated) => {
+            setCrmClients((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+            setEditingClient(null);
+          }}
+        />
+      )}
+      {addClientOpen && (
+        <AddCrmClientModal
+          onClose={() => setAddClientOpen(false)}
+          onCreated={(newClient) => {
+            setCrmClients((prev) => [newClient, ...prev]);
+            setAddClientOpen(false);
+          }}
+        />
       )}
 
       {/* ── Dashboard Migration Tracker ── */}
       {activeTab === "migration" && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Dashboard Migration Tracker</h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Credential issuance and go-live readiness</p>
+        <div className="space-y-4">
+          {crmError && (
+            <div className="rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+              {crmError}
+            </div>
+          )}
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "Dashboard Clients",  value: migTotal,           color: "border-t-slate-400",   numColor: "text-slate-900 dark:text-slate-100",        textColor: "text-slate-500 dark:text-slate-400" },
+              { label: "Live",               value: migLive,            color: "border-t-emerald-500", numColor: "text-emerald-700 dark:text-emerald-400",    textColor: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Credentials Ready",  value: migCredReady,       color: "border-t-blue-500",    numColor: "text-blue-700 dark:text-blue-400",          textColor: "text-blue-600 dark:text-blue-400" },
+              { label: "Meeting Arranged",   value: migMeetingArranged, color: "border-t-violet-500",  numColor: "text-violet-700 dark:text-violet-400",      textColor: "text-violet-600 dark:text-violet-400" },
+            ].map(card => (
+              <div key={card.label} className={cn(
+                "bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm border-t-[3px]",
+                card.color,
+              )}>
+                <p className={cn("text-3xl font-black tracking-tight", card.numColor)}>{card.value}</p>
+                <p className={cn("text-xs font-medium mt-1", card.textColor)}>{card.label}</p>
+              </div>
+            ))}
           </div>
-          <Table>
-            <TableHeader className="bg-slate-50 dark:bg-slate-800/60">
-              <TableRow className="hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-default">
-                <TableHead>Client</TableHead>
-                <TableHead>Go-Live Date</TableHead>
-                <TableHead>Credentials</TableHead>
-                <TableHead>Date Issued</TableHead>
-                <TableHead>Meeting</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Status Note</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {MOCK_CLIENTS.filter((c) => c.serviceTypes.includes("Dashboard")).map((client) => {
-                const m = client.dashboardMigration;
-                return (
-                  <TableRow key={client.id} onClick={() => navigate(`/clients/${client.id}`)}>
-                    <TableCell>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0" style={avatarGradient(client.name)}>
-                          {client.name[0]}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-tight">{client.name}</p>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500">{client.state}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 font-mono">
-                      {m.goLiveDate ?? <span className="text-slate-300 dark:text-slate-600">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <span className={cn(
-                        "text-[11px] font-semibold px-2.5 py-1 rounded-full border",
-                        m.credentialsCreated
-                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                      )}>
-                        {m.credentialsCreated ? "Yes" : "No"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 font-mono">
-                      {m.dateCredentialsIssued ?? <span className="text-slate-300 dark:text-slate-600">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <span className={cn(
-                        "text-[11px] font-medium px-2.5 py-1 rounded-full border",
-                        m.scheduledMeeting === "Yes"
-                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
-                          : m.scheduledMeeting === "Sent Guidelines"
-                          ? "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                      )}>
-                        {m.scheduledMeeting}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full border", SERVICE_BADGE[m.service as ServiceType] ?? "bg-slate-100 text-slate-600")}>
-                        {m.service}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {m.statusNote ? (
-                        <span className={cn(
-                          "text-[11px] font-semibold px-2.5 py-1 rounded-full border",
-                          m.statusNote === "LIVE"
-                            ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                        )}>
-                          {m.statusNote}
-                        </span>
-                      ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
+
+          {/* Progress bar — live vs pending */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Go-Live Progress</p>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                {migLive}/{migTotal} live
+              </span>
+            </div>
+            <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 gap-px">
+              <div
+                className="h-full bg-emerald-500 transition-all rounded-l-full"
+                style={{ width: `${migTotal > 0 ? (migLive / migTotal) * 100 : 0}%` }}
+              />
+              <div
+                className="h-full bg-slate-200 dark:bg-slate-700 transition-all rounded-r-full flex-1"
+              />
+            </div>
+            <div className="flex items-center gap-4 mt-2">
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                {migLive} Live
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+                {migPending} Pending
+              </span>
+            </div>
+          </div>
+
+          {/* Search & filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-48 max-w-sm">
+              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search by client name…"
+                value={migSearch}
+                onChange={e => setMigSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
+              />
+            </div>
+            <select
+              value={migCredFilter}
+              onChange={e => setMigCredFilter(e.target.value as typeof migCredFilter)}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Credentials</option>
+              <option value="Yes">Credentials Created</option>
+              <option value="No">Credentials Pending</option>
+            </select>
+            <select
+              value={migMeetingFilter}
+              onChange={e => setMigMeetingFilter(e.target.value as typeof migMeetingFilter)}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Meetings</option>
+              <option value="Yes">Meeting Scheduled</option>
+              <option value="Sent Guidelines">Guidelines Sent</option>
+              <option value="No">No Meeting</option>
+            </select>
+            {(migSearch || migCredFilter !== "All" || migMeetingFilter !== "All") && (
+              <button
+                onClick={() => { setMigSearch(""); setMigCredFilter("All"); setMigMeetingFilter("All"); }}
+                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
+              >
+                Clear all
+              </button>
+            )}
+            <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 font-medium">
+              {migFiltered.length} of {migTotal}
+            </span>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <Table>
+              <TableHeader className="bg-slate-50 dark:bg-slate-800/60">
+                <TableRow className="hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-default">
+                  <TableHead>Client</TableHead>
+                  <TableHead>Go-Live Date</TableHead>
+                  <TableHead>Credentials Created</TableHead>
+                  <TableHead>Date Issued</TableHead>
+                  <TableHead>Scheduled Meeting</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Status Note</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {crmLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i} className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
+                      <TableCell><Skeleton className="h-8 w-36" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : migFiltered.length === 0 ? (
+                  <TableRow className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
+                    <TableCell colSpan={7} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+                      No clients match the current filters.
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ) : migFiltered.map(client => {
+                  const m = client.dashboardMigration;
+                  // If linked to a real org, navigate to the org profile; otherwise fall back to CRM id
+                  const profilePath = `/clients/${client.platformActivity.linkedOrganizationId ?? client.id}`;
+                  return (
+                    <TableRow key={client.id} onClick={() => navigate(profilePath)}>
+
+                      {/* Client */}
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm" style={avatarGradient(client.name)}>
+                            {client.name[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-tight">{client.name}</p>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{client.state} · {client.zone}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Go-Live Date */}
+                      <TableCell>
+                        {m.goLiveDate ? (
+                          <span className="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {formatDate(m.goLiveDate)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-300 dark:text-slate-600">Not scheduled</span>
+                        )}
+                      </TableCell>
+
+                      {/* Credentials Created */}
+                      <TableCell>
+                        <span className={cn(
+                          "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border",
+                          m.credentialsCreated
+                            ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                        )}>
+                          <span className={cn("w-1.5 h-1.5 rounded-full", m.credentialsCreated ? "bg-emerald-500" : "bg-slate-400")} />
+                          {m.credentialsCreated ? "Yes" : "No"}
+                        </span>
+                      </TableCell>
+
+                      {/* Date Credentials Issued */}
+                      <TableCell>
+                        {m.dateCredentialsIssued ? (
+                          <span className="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {formatDate(m.dateCredentialsIssued)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                        )}
+                      </TableCell>
+
+                      {/* Scheduled Meeting */}
+                      <TableCell>
+                        <span className={cn(
+                          "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border",
+                          m.scheduledMeeting === "Yes"
+                            ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
+                            : m.scheduledMeeting === "Sent Guidelines"
+                              ? "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                        )}>
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            m.scheduledMeeting === "Yes" ? "bg-emerald-500" : m.scheduledMeeting === "Sent Guidelines" ? "bg-blue-500" : "bg-slate-400"
+                          )} />
+                          {m.scheduledMeeting}
+                        </span>
+                      </TableCell>
+
+                      {/* Service */}
+                      <TableCell>
+                        <span className={cn(
+                          "text-[11px] font-medium px-2 py-0.5 rounded-full border",
+                          SERVICE_BADGE[m.service as ServiceType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                        )}>
+                          {m.service}
+                        </span>
+                      </TableCell>
+
+                      {/* Status Note */}
+                      <TableCell>
+                        {m.statusNote ? (
+                          <span className={cn(
+                            "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border",
+                            m.statusNote === "LIVE"
+                              ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
+                              : m.statusNote === "Prompted"
+                                ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                          )}>
+                            <span className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              m.statusNote === "LIVE" ? "bg-emerald-500" : m.statusNote === "Prompted" ? "bg-amber-400" : "bg-slate-400"
+                            )} />
+                            {m.statusNote}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
     </div>

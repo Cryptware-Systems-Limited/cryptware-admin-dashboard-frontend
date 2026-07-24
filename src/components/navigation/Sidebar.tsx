@@ -1,4 +1,5 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   HomeIcon,
@@ -8,6 +9,7 @@ import {
   DocumentTextIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeSolid,
@@ -17,6 +19,7 @@ import {
   DocumentTextIcon as DocSolid,
 } from "@heroicons/react/24/solid";
 import { cn } from "@/lib/utils";
+import { useEnv, type AppEnv } from "@/context/EnvContext";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/overview", icon: HomeIcon, iconActive: HomeSolid },
@@ -33,6 +36,22 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { env, isProd, switchEnv } = useEnv();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingEnv, setPendingEnv] = useState<AppEnv | null>(null);
+
+  function requestSwitch(next: AppEnv) {
+    if (next === env) return;
+    setPendingEnv(next);
+    setConfirmOpen(true);
+  }
+
+  function confirmSwitch() {
+    if (!pendingEnv) return;
+    switchEnv(pendingEnv, () => navigate("/login"));
+    setConfirmOpen(false);
+  }
 
   const isClientsActive =
     location.pathname === "/clients" || location.pathname.startsWith("/clients/");
@@ -125,17 +144,66 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Bottom */}
-      <div className="px-2 pb-4 border-t border-slate-700/60 dark:border-slate-800/60 pt-3">
+      <div className="px-2 pb-4 border-t border-slate-700/60 dark:border-slate-800/60 pt-3 space-y-2">
+
+        {/* Environment switcher */}
         <AnimatePresence>
-          {!collapsed && (
+          {!collapsed ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mb-3 mx-0.5 px-3 py-2 bg-slate-800 dark:bg-slate-900 rounded-xl"
+              className="mx-0.5"
             >
-              <p className="text-slate-400 text-xs">Logged in as</p>
-              <p className="text-white text-sm font-semibold truncate">Super Admin</p>
+              <p className="text-slate-500 text-[10px] font-medium uppercase tracking-wider mb-1.5 px-1">Environment</p>
+              <div className="flex rounded-lg overflow-hidden border border-slate-700 text-xs font-semibold">
+                <button
+                  onClick={() => requestSwitch("preprod")}
+                  className={cn(
+                    "flex-1 py-1.5 transition-colors",
+                    env === "preprod"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-slate-700"
+                  )}
+                >
+                  Preprod
+                </button>
+                <button
+                  onClick={() => requestSwitch("prod")}
+                  className={cn(
+                    "flex-1 py-1.5 transition-colors",
+                    env === "prod"
+                      ? "bg-red-600 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-slate-700"
+                  )}
+                >
+                  Prod
+                </button>
+              </div>
+              {isProd && (
+                <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1.5 rounded-lg bg-red-600/15 border border-red-500/30">
+                  <ExclamationTriangleIcon className="w-3 h-3 text-red-400 shrink-0" />
+                  <p className="text-red-400 text-[10px] font-medium">Live production data</p>
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex justify-center"
+            >
+              <button
+                onClick={() => requestSwitch(env === "prod" ? "preprod" : "prod")}
+                title={`Switch to ${env === "prod" ? "Preprod" : "Prod"}`}
+                className={cn(
+                  "w-8 h-8 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center",
+                  isProd ? "bg-red-600 text-white" : "bg-blue-600 text-white"
+                )}
+              >
+                {isProd ? "P" : "D"}
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -154,6 +222,53 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </button>
       </div>
+
+      {/* Switch confirmation modal */}
+      {confirmOpen && pendingEnv && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
+                pendingEnv === "prod" ? "bg-red-100 dark:bg-red-500/10" : "bg-blue-100 dark:bg-blue-500/10"
+              )}>
+                <ExclamationTriangleIcon className={cn(
+                  "w-5 h-5",
+                  pendingEnv === "prod" ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"
+                )} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
+                  Switch to {pendingEnv === "prod" ? "Production" : "Preprod"}?
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {pendingEnv === "prod"
+                    ? "You will be connecting to live production data. All actions are real and immediate."
+                    : "You will switch back to the preprod/test environment."}
+                  {" "}You'll need to log in again.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSwitch}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-white text-sm font-semibold transition active:scale-95",
+                  pendingEnv === "prod" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                Switch & Log In
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.aside>
   );
 }
