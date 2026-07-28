@@ -78,10 +78,14 @@ const STATUS_BADGE: Record<ProjectStatus, string> = {
 };
 
 // ── API types ─────────────────────────────────────────────────────────────────
+type ApiOrgStatus = "Active" | "Suspended" | "Inactive Warning";
+type ApiServiceCategory = "DASHBOARD" | "ERP" | "BOTH";
+
 interface GeoOrgEntry {
   id: string;
   businessName: string;
-  status: "Active" | "Suspended" | "Inactive Warning";
+  status: ApiOrgStatus;
+  serviceCategory: ApiServiceCategory;
 }
 interface GeoStateData {
   state: string;
@@ -106,8 +110,13 @@ export default function GeographicCoverage() {
   const [apiLoading, setApiLoading] = useState(false);
 
   const [zoneFilter, setZoneFilter] = useState<string | null>(null);
+  const [stateFilter, setStateFilter] = useState<string>("All");
+  // CRM-mode filters
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "All">("All");
   const [serviceFilter, setServiceFilter] = useState<ServiceType | "All">("All");
+  // API-mode filters
+  const [apiStatusFilter, setApiStatusFilter] = useState<ApiOrgStatus | "All">("All");
+  const [apiServiceFilter, setApiServiceFilter] = useState<ApiServiceCategory | "All">("All");
   const [expandedZone, setExpandedZone] = useState<string | null>(null);
   const [hoveredState, setHoveredState] = useState<string | null>(null);
 
@@ -126,20 +135,27 @@ export default function GeographicCoverage() {
   useEffect(() => {
     if (dataSource !== "api") return;
     setApiLoading(true);
-    api.get<{ status: string; data: GeoCoverageData }>("/admin/geographic-coverage")
+    const params = new URLSearchParams();
+    if (zoneFilter)                         params.set("zone", zoneFilter);
+    if (stateFilter !== "All")              params.set("state", stateFilter);
+    if (apiStatusFilter !== "All")          params.set("status", apiStatusFilter);
+    if (apiServiceFilter !== "All")         params.set("serviceCategory", apiServiceFilter);
+    const qs = params.toString();
+    api.get<{ status: string; data: GeoCoverageData }>(`/admin/geographic-coverage${qs ? `?${qs}` : ""}`)
       .then(res => setApiCoverage(res.data))
       .catch(() => {})
       .finally(() => setApiLoading(false));
-  }, [dataSource]);
+  }, [dataSource, zoneFilter, stateFilter, apiStatusFilter, apiServiceFilter]);
 
   // ── CRM derived data ──────────────────────────────────────────────────────────
   const filteredClients = useMemo<Client[]>(() => {
     let list = MOCK_CLIENTS;
     if (zoneFilter)              list = list.filter(c => c.zone === zoneFilter);
+    if (stateFilter !== "All")   list = list.filter(c => c.state === stateFilter);
     if (statusFilter !== "All")  list = list.filter(c => c.projectStatus === statusFilter);
     if (serviceFilter !== "All") list = list.filter(c => c.serviceTypes.includes(serviceFilter));
     return list;
-  }, [zoneFilter, statusFilter, serviceFilter]);
+  }, [zoneFilter, stateFilter, statusFilter, serviceFilter]);
 
   const clientsByState = useMemo(() => {
     const map: Record<string, Client[]> = {};
@@ -258,10 +274,11 @@ export default function GeographicCoverage() {
       </div>
 
       {/* ── Filters ── */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="space-y-2">
+        {/* Row 1: Zone pills */}
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setZoneFilter(null)}
+            onClick={() => { setZoneFilter(null); setStateFilter("All"); }}
             className={cn(
               "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all",
               !zoneFilter
@@ -274,7 +291,7 @@ export default function GeographicCoverage() {
           {Object.entries(ZONE_CONFIG).map(([zone, cfg]) => (
             <button
               key={zone}
-              onClick={() => setZoneFilter(z => z === zone ? null : zone)}
+              onClick={() => { setZoneFilter(z => z === zone ? null : zone); setStateFilter("All"); }}
               className={cn(
                 "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all",
                 zoneFilter === zone
@@ -288,31 +305,73 @@ export default function GeographicCoverage() {
           ))}
         </div>
 
-        {dataSource === "crm" && (
-          <div className="flex gap-2 ml-auto">
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as ProjectStatus | "All")}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
-            >
-              <option value="All">All Statuses</option>
-              <option value="Live">Live</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Blocked">Blocked</option>
-              <option value="Not Started">Not Started</option>
-            </select>
-            <select
-              value={serviceFilter}
-              onChange={e => setServiceFilter(e.target.value as ServiceType | "All")}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
-            >
-              <option value="All">All Services</option>
-              <option value="Dashboard">Dashboard</option>
-              <option value="ERP Support">ERP Support</option>
-              <option value="ERP End-to-End">ERP End-to-End</option>
-            </select>
-          </div>
-        )}
+        {/* Row 2: State / Status / ServiceType dropdowns */}
+        <div className="flex flex-wrap gap-2">
+          {/* State filter — always visible */}
+          <select
+            value={stateFilter}
+            onChange={e => setStateFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
+          >
+            <option value="All">All States</option>
+            {(zoneFilter ? ZONE_CONFIG[zoneFilter]?.states : Object.values(ZONE_CONFIG).flatMap(c => c.states))
+              .sort()
+              .map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          {/* CRM-mode filters */}
+          {dataSource === "crm" && (
+            <>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as ProjectStatus | "All")}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Live">Live</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Not Started">Not Started</option>
+              </select>
+              <select
+                value={serviceFilter}
+                onChange={e => setServiceFilter(e.target.value as ServiceType | "All")}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
+              >
+                <option value="All">All Services</option>
+                <option value="Dashboard">Dashboard</option>
+                <option value="ERP Support">ERP Support</option>
+                <option value="ERP End-to-End">ERP End-to-End</option>
+              </select>
+            </>
+          )}
+
+          {/* API-mode filters */}
+          {dataSource === "api" && (
+            <>
+              <select
+                value={apiStatusFilter}
+                onChange={e => setApiStatusFilter(e.target.value as ApiOrgStatus | "All")}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Suspended">Suspended</option>
+                <option value="Inactive Warning">Inactive Warning</option>
+              </select>
+              <select
+                value={apiServiceFilter}
+                onChange={e => setApiServiceFilter(e.target.value as ApiServiceCategory | "All")}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
+              >
+                <option value="All">All Service Types</option>
+                <option value="DASHBOARD">Dashboard</option>
+                <option value="ERP">ERP</option>
+                <option value="BOTH">Both</option>
+              </select>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Map + Zone Summary Panel ── */}
