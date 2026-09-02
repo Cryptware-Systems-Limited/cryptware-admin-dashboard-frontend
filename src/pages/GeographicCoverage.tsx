@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell, ResponsiveContainer,
 } from "recharts";
@@ -102,6 +102,7 @@ interface GeoCoverageData {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function GeographicCoverage() {
+  const navigate = useNavigate();
   const mapRef = useRef<HTMLDivElement>(null);
   const tooltipCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,6 +119,7 @@ export default function GeographicCoverage() {
   const [apiStatusFilter, setApiStatusFilter] = useState<ApiOrgStatus | "All">("All");
   const [apiServiceFilter, setApiServiceFilter] = useState<ApiServiceCategory | "All">("All");
   const [expandedZone, setExpandedZone] = useState<string | null>(null);
+  const [expandedState, setExpandedState] = useState<string | null>(null);
   const [hoveredState, setHoveredState] = useState<string | null>(null);
 
   // ── Tooltip hover helpers (150 ms grace so user can move pin → tooltip) ───────
@@ -693,6 +695,25 @@ export default function GeographicCoverage() {
                   <span className="text-xs text-slate-400 dark:text-slate-500">
                     {cfg.states.length} states · {zoneTotal} client{zoneTotal !== 1 ? "s" : ""}
                   </span>
+                  {zoneTotal > 0 && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(`/clients?${dataSource === "api" ? "tab=onboarded&" : ""}zone=${encodeURIComponent(zone)}`);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.stopPropagation();
+                          navigate(`/clients?${dataSource === "api" ? "tab=onboarded&" : ""}zone=${encodeURIComponent(zone)}`);
+                        }
+                      }}
+                      className="text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline whitespace-nowrap"
+                    >
+                      View clients
+                    </span>
+                  )}
                   {isExpanded
                     ? <ChevronDownIcon className="w-4 h-4 text-slate-400 shrink-0" />
                     : <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
@@ -711,10 +732,26 @@ export default function GeographicCoverage() {
                         : <><span className="text-center">Active</span><span className="text-center">Inactive</span></>
                       }
                     </div>
-                    {zoneStateData.map(({ state, count, active, inactive }) => (
+                    {zoneStateData.map(({ state, count, active, inactive }) => {
+                      const stateClients: Array<Client | GeoOrgEntry> = dataSource === "api"
+                        ? (apiOrgsByState[state] ?? [])
+                        : (clientsByState[state] ?? []);
+                      const isStateExpanded = expandedState === state;
+                      return (
+                      <div key={state} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
                       <div
-                        key={state}
-                        className="grid px-8 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                        role={count > 0 ? "button" : undefined}
+                        tabIndex={count > 0 ? 0 : undefined}
+                        onClick={() => count > 0 && setExpandedState(current => current === state ? null : state)}
+                        onKeyDown={(event) => {
+                          if (count > 0 && (event.key === "Enter" || event.key === " ")) {
+                            setExpandedState(current => current === state ? null : state);
+                          }
+                        }}
+                        className={cn(
+                          "grid px-8 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors",
+                          count > 0 && "cursor-pointer",
+                        )}
                         style={{ gridTemplateColumns: dataSource === "api" ? "1fr 1fr auto" : "1fr 1fr auto auto" }}
                       >
                         <div className="col-span-2 flex items-center gap-2">
@@ -726,6 +763,10 @@ export default function GeographicCoverage() {
                             {state}
                           </span>
                           {count === 0 && <span className="text-[10px] text-slate-300 dark:text-slate-600">No clients</span>}
+                          {count > 0 && (isStateExpanded
+                            ? <ChevronDownIcon className="w-3.5 h-3.5 text-slate-400 ml-auto" />
+                            : <ChevronRightIcon className="w-3.5 h-3.5 text-slate-400 ml-auto" />
+                          )}
                         </div>
                         {dataSource === "api" ? (
                           <div className="text-right">
@@ -751,7 +792,37 @@ export default function GeographicCoverage() {
                           </>
                         )}
                       </div>
-                    ))}
+                      {isStateExpanded && (
+                        <div className="bg-white/70 dark:bg-slate-950/30 border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+                          {stateClients.map((entry) => {
+                            const isApiClient = "businessName" in entry;
+                            const name = isApiClient ? entry.businessName : entry.name;
+                            const detail = isApiClient
+                              ? `${entry.status} · ${entry.serviceCategory}`
+                              : `${entry.projectStatus} · ${entry.serviceTypes.join(", ")}`;
+                            return (
+                              <div key={entry.id} className="flex items-center gap-3 pl-12 pr-8 py-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ backgroundColor: cfg.color }}>
+                                  {name.trim().charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{name}</p>
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{detail}</p>
+                                </div>
+                                <Link
+                                  to={`/clients/${entry.id}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline whitespace-nowrap"
+                                >
+                                  View details
+                                </Link>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      </div>
+                    );})}
                   </div>
                 )}
               </div>

@@ -27,6 +27,7 @@ type SortField = "name" | "erpSystem" | "projectStatus" | "ragStatus";
 type SortDir = "asc" | "desc";
 type ActiveTab = "master" | "migration" | "onboarded";
 type OnboardedStatus = "Active" | "Suspended" | "Inactive Warning";
+type ActivityLevel = "High" | "Medium" | "Low" | "Inactive";
 
 type ServiceCategory = "DASHBOARD" | "ERP" | "BOTH";
 type CredentialEnvironment = "TEST" | "PROD" | "BOTH";
@@ -43,6 +44,8 @@ interface OnboardedClient {
   activeApiKeys: number;
   totalApiKeys: number;
   totalInvoices: number;
+  lastInvoiceDate: string | null;
+  activityLevel: ActivityLevel;
   serviceCategory: ServiceCategory;
   credentialEnvironment: CredentialEnvironment;
 }
@@ -162,6 +165,13 @@ const CRED_ENV_BADGE: Record<CredentialEnvironment, string> = {
   BOTH: "bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20",
 };
 
+const ACTIVITY_BADGE: Record<ActivityLevel, string> = {
+  High: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20",
+  Medium: "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20",
+  Low: "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20",
+  Inactive: "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
+};
+
 function formatDate(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -182,17 +192,20 @@ function SortIcon({ field, active, dir }: { field: SortField; active: SortField;
 export default function Clients() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const geographicZone = searchParams.get("zone") ?? "";
+  const geographicState = searchParams.get("state") ?? "";
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "All">("All");
   const [serviceFilter, setServiceFilter] = useState<ServiceType | "All">("All");
   const [ragFilter, setRagFilter] = useState<RAGStatus | "All">("All");
   const [erpFilter, setErpFilter] = useState<string>("All");
-  const [locationFilter, setLocationFilter] = useState<string>("All");
+  const [locationFilter, setLocationFilter] = useState<string>(() => searchParams.get("zone") ?? "All");
+  const [stateFilter, setStateFilter] = useState<string>(() => searchParams.get("state") ?? "All");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
-    searchParams.get("status") ? "onboarded" : "master"
+    searchParams.get("tab") === "onboarded" || searchParams.get("status") ? "onboarded" : "master"
   );
 
   // ── Dashboard Migration state ──────────────────────────────────────────────
@@ -241,6 +254,8 @@ export default function Clients() {
   const [onboardedLoading, setOnboardedLoading] = useState(false);
   const [onboardedError, setOnboardedError] = useState<string | null>(null);
   const [invoiceActivityFilter, setInvoiceActivityFilter] = useState<string>("All");
+  const [activityLevelFilter, setActivityLevelFilter] = useState<string>("All");
+  const [invoiceSort, setInvoiceSort] = useState<"none" | "asc" | "desc">("none");
   const [onboardedFrom, setOnboardedFrom] = useState<string>("");
   const [onboardedTo, setOnboardedTo] = useState<string>("");
 
@@ -249,6 +264,8 @@ export default function Clients() {
     status: string,
     page: number,
     invoiceActivity: string,
+    activityLevel: string,
+    invoiceOrder: string,
     dateFrom: string,
     dateTo: string,
   ) => {
@@ -259,6 +276,10 @@ export default function Clients() {
       if (search.trim()) params.set("search", search.trim());
       if (status !== "All") params.set("status", status.toLowerCase().replace(/ /g, "_").replace("inactive_warning", "warning"));
       if (invoiceActivity !== "All") params.set("invoiceActivity", invoiceActivity);
+      if (activityLevel !== "All") params.set("activityLevel", activityLevel.toLowerCase());
+      if (invoiceOrder !== "none") params.set("invoiceSort", invoiceOrder);
+      if (geographicZone) params.set("zone", geographicZone);
+      if (geographicState) params.set("state", geographicState);
       if (dateFrom) params.set("onboardedFrom", dateFrom);
       if (dateTo) params.set("onboardedTo", dateTo);
       const res = await api.get<OnboardedResponse>(`/admin/clients/onboarded?${params.toString()}`);
@@ -270,13 +291,13 @@ export default function Clients() {
     } finally {
       setOnboardedLoading(false);
     }
-  }, []);
+  }, [geographicZone, geographicState]);
 
   useEffect(() => {
     if (activeTab === "onboarded") {
-      fetchOnboarded(onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, onboardedFrom, onboardedTo);
+      fetchOnboarded(onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo);
     }
-  }, [activeTab, onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, onboardedFrom, onboardedTo, fetchOnboarded]);
+  }, [activeTab, onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo, fetchOnboarded]);
 
   // ── Stats (from API) ───────────────────────────────────────────────────────
   const total      = crmStats?.total ?? 0;
@@ -324,11 +345,17 @@ export default function Clients() {
     if (ragFilter !== "All")      list = list.filter((c) => c.ragStatus === ragFilter);
     if (erpFilter !== "All")      list = list.filter((c) => c.erpSystem.toLowerCase().includes(erpFilter.toLowerCase()));
     if (locationFilter !== "All") list = list.filter((c) => c.zone === locationFilter);
+    if (stateFilter !== "All")    list = list.filter((c) => c.state === stateFilter);
     return [...list].sort((a, b) => {
       const cmp = String(a[sortField] ?? "").localeCompare(String(b[sortField] ?? ""));
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [crmClients, search, statusFilter, serviceFilter, ragFilter, erpFilter, locationFilter, sortField, sortDir]);
+  }, [crmClients, search, statusFilter, serviceFilter, ragFilter, erpFilter, locationFilter, stateFilter, sortField, sortDir]);
+
+  const availableStates = useMemo(
+    () => [...new Set(crmClients.filter(c => locationFilter === "All" || c.zone === locationFilter).map(c => c.state))].sort(),
+    [crmClients, locationFilter],
+  );
 
   function handleSort(f: SortField) {
     if (sortField === f) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -464,6 +491,12 @@ export default function Clients() {
       {activeTab === "master" && (
         <>
           {/* Filters */}
+          {(geographicZone || geographicState) && (
+            <div className="flex items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-500/20 bg-orange-50 dark:bg-orange-500/10 px-4 py-3 text-sm text-orange-800 dark:text-orange-300">
+              Showing clients in <strong>{geographicState || geographicZone}</strong>
+              <button onClick={() => navigate("/clients")} className="ml-auto text-xs font-semibold hover:underline">Clear location</button>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-48 max-w-sm">
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
@@ -517,7 +550,7 @@ export default function Clients() {
 
             <select
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
+              onChange={(e) => { setLocationFilter(e.target.value); setStateFilter("All"); }}
               className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
             >
               <option value="All">All Zones</option>
@@ -529,9 +562,18 @@ export default function Clients() {
               <option value="North Central">North Central</option>
             </select>
 
-            {(statusFilter !== "All" || serviceFilter !== "All" || ragFilter !== "All" || erpFilter !== "All" || locationFilter !== "All" || search) && (
+            <select
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All States</option>
+              {availableStates.map(state => <option key={state} value={state}>{state}</option>)}
+            </select>
+
+            {(statusFilter !== "All" || serviceFilter !== "All" || ragFilter !== "All" || erpFilter !== "All" || locationFilter !== "All" || stateFilter !== "All" || search) && (
               <button
-                onClick={() => { setSearch(""); setStatusFilter("All"); setServiceFilter("All"); setRagFilter("All"); setErpFilter("All"); setLocationFilter("All"); }}
+                onClick={() => { setSearch(""); setStatusFilter("All"); setServiceFilter("All"); setRagFilter("All"); setErpFilter("All"); setLocationFilter("All"); setStateFilter("All"); }}
                 className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
               >
                 Clear all
@@ -678,6 +720,12 @@ export default function Clients() {
       {/* ── Onboarded Clients (API) ── */}
       {activeTab === "onboarded" && (
         <div className="space-y-4">
+          {(geographicZone || geographicState) && (
+            <div className="flex items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-500/20 bg-orange-50 dark:bg-orange-500/10 px-4 py-3 text-sm text-orange-800 dark:text-orange-300">
+              Showing onboarded clients in <strong>{geographicState || geographicZone}</strong>
+              <button onClick={() => navigate("/clients?tab=onboarded")} className="ml-auto text-xs font-semibold hover:underline">Clear location</button>
+            </div>
+          )}
           {/* Stats */}
           {onboardedStats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -738,6 +786,28 @@ export default function Clients() {
               <option value="last_30_days">Active Last 30 Days</option>
             </select>
 
+            <select
+              value={activityLevelFilter}
+              onChange={(e) => { setActivityLevelFilter(e.target.value); setOnboardedPage(1); }}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Activity Levels</option>
+              <option value="High">High Activity</option>
+              <option value="Medium">Medium Activity</option>
+              <option value="Low">Low Activity</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+
+            <select
+              value={invoiceSort}
+              onChange={(e) => { setInvoiceSort(e.target.value as "none" | "asc" | "desc"); setOnboardedPage(1); }}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="none">Invoice Volume</option>
+              <option value="desc">Invoices: High to Low</option>
+              <option value="asc">Invoices: Low to High</option>
+            </select>
+
             <div className="flex items-center gap-1.5">
               <input
                 type="date"
@@ -754,9 +824,9 @@ export default function Clients() {
               />
             </div>
 
-            {(onboardedSearch || onboardedStatusFilter !== "All" || invoiceActivityFilter !== "All" || onboardedFrom || onboardedTo) && (
+            {(onboardedSearch || onboardedStatusFilter !== "All" || invoiceActivityFilter !== "All" || activityLevelFilter !== "All" || invoiceSort !== "none" || onboardedFrom || onboardedTo) && (
               <button
-                onClick={() => { setOnboardedSearch(""); setOnboardedStatusFilter("All"); setInvoiceActivityFilter("All"); setOnboardedFrom(""); setOnboardedTo(""); setOnboardedPage(1); }}
+                onClick={() => { setOnboardedSearch(""); setOnboardedStatusFilter("All"); setInvoiceActivityFilter("All"); setActivityLevelFilter("All"); setInvoiceSort("none"); setOnboardedFrom(""); setOnboardedTo(""); setOnboardedPage(1); }}
                 className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
               >
                 Clear all
@@ -787,8 +857,14 @@ export default function Clients() {
                   <TableHead>Status</TableHead>
                   <TableHead>Onboarded</TableHead>
                   <TableHead>Last API Activity</TableHead>
+                  <TableHead>Activity Level</TableHead>
                   <TableHead className="text-center">API Keys</TableHead>
-                  <TableHead className="text-center">Invoices</TableHead>
+                  <TableHead
+                    className="text-center cursor-pointer select-none"
+                    onClick={() => { setInvoiceSort(s => s === "desc" ? "asc" : "desc"); setOnboardedPage(1); }}
+                  >
+                    Invoices {invoiceSort === "asc" ? "↑" : invoiceSort === "desc" ? "↓" : "↕"}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -803,13 +879,14 @@ export default function Clients() {
                       <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : onboardedClients.length === 0 ? (
                   <TableRow className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
-                    <TableCell colSpan={10} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+                    <TableCell colSpan={11} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
                       No onboarded clients match the current filters.
                     </TableCell>
                   </TableRow>
@@ -863,6 +940,11 @@ export default function Clients() {
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
                         {formatDate(client.lastApiActivity)}
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn("text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap", ACTIVITY_BADGE[client.activityLevel])}>
+                          {client.activityLevel}
+                        </span>
                       </TableCell>
                       <TableCell className="text-center">
                         <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">

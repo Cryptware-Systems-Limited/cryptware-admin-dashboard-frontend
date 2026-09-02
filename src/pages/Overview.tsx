@@ -11,6 +11,7 @@ import {
   ArrowRightIcon,
   NoSymbolIcon,
   ArrowPathIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import {
   AreaChart,
@@ -20,6 +21,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -29,8 +34,13 @@ interface MetricsStats {
   totalClients: number;
   totalInvoices: number;
   monthlyInvoices: number;
-  suspendedOrInactiveClients: number;
+  suspendedClients: number;
 }
+
+type TrendPeriod = "monthly" | "quarterly" | "annual";
+interface TrendPoint { period: string; count: number; }
+interface StatusDistribution { live: number; inProgress: number; blocked: number; notStarted: number; inactive: number; }
+interface TransmissionSummary { testClients: number; testTransmitting: number; prodClients: number; prodTransmitting: number; }
 
 interface RecentActivityItem {
   id: string;
@@ -44,20 +54,22 @@ interface MetricsResponse {
   status: string;
   data: {
     stats: MetricsStats;
+    invoiceTrends: Record<TrendPeriod, TrendPoint[]>;
+    statusDistribution: StatusDistribution;
+    transmissionSummary: TransmissionSummary;
     recentActivity: RecentActivityItem[];
     generatedAt: string;
   };
 }
 
 // ── Static chart data (placeholder until reports endpoint is built) ───────────
-const revenueData = [
-  { month: "Jan", revenue: 42000, invoices: 320 },
-  { month: "Feb", revenue: 55000, invoices: 410 },
-  { month: "Mar", revenue: 48000, invoices: 380 },
-  { month: "Apr", revenue: 63000, invoices: 490 },
-  { month: "May", revenue: 71000, invoices: 560 },
-  { month: "Jun", revenue: 68000, invoices: 530 },
-];
+const STATUS_CHART = [
+  { key: "live", label: "Live", color: "#22c55e" },
+  { key: "inProgress", label: "In Progress", color: "#3b82f6" },
+  { key: "blocked", label: "Blocked", color: "#ef4444" },
+  { key: "notStarted", label: "Not Started", color: "#94a3b8" },
+  { key: "inactive", label: "Inactive", color: "#f59e0b" },
+] as const;
 
 const STATUS_STYLE: Record<RecentActivityItem["status"], string> = {
   Active:           "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -248,6 +260,11 @@ function ClientSearch() {
 export default function Overview() {
   const [stats, setStats] = useState<MetricsStats | null>(null);
   const [activity, setActivity] = useState<RecentActivityItem[]>([]);
+  const [invoiceTrends, setInvoiceTrends] = useState<Record<TrendPeriod, TrendPoint[]>>({ monthly: [], quarterly: [], annual: [] });
+  const [statusDistribution, setStatusDistribution] = useState<StatusDistribution>({ live: 0, inProgress: 0, blocked: 0, notStarted: 0, inactive: 0 });
+  const [transmissionSummary, setTransmissionSummary] = useState<TransmissionSummary>({ testClients: 0, testTransmitting: 0, prodClients: 0, prodTransmitting: 0 });
+  const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>("monthly");
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -255,11 +272,37 @@ export default function Overview() {
     api.get<MetricsResponse>("/admin/metrics")
       .then((res) => {
         setStats(res.data.stats);
+        setInvoiceTrends(res.data.invoiceTrends);
+        setStatusDistribution(res.data.statusDistribution);
+        setTransmissionSummary(res.data.transmissionSummary);
         setActivity(res.data.recentActivity);
       })
       .catch((err) => setError(err?.message ?? "Failed to load metrics"))
       .finally(() => setLoading(false));
   }, []);
+
+  async function downloadClientCsv(environment: "TEST" | "PROD", transmitting: boolean) {
+    const key = `${environment}-${transmitting}`;
+    setDownloading(key);
+    try {
+      const result = await api.download(`/admin/metrics/clients-export?environment=${environment}&transmitting=${transmitting}`);
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${environment.toLowerCase()}-clients${transmitting ? "-transmitting" : ""}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  const statusChartData = STATUS_CHART.map((item) => ({
+    ...item,
+    value: statusDistribution[item.key],
+  })).filter((item) => item.value > 0);
 
   return (
     <div className="space-y-6">
@@ -292,9 +335,9 @@ export default function Overview() {
               <div className="text-center">
                 <p className={cn(
                   "text-xl font-bold",
-                  stats.suspendedOrInactiveClients > 0 ? "text-red-600" : "text-emerald-600"
+                  stats.suspendedClients > 0 ? "text-red-600" : "text-emerald-600"
                 )}>
-                  {stats.suspendedOrInactiveClients}
+                  {stats.suspendedClients}
                 </p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Suspended</p>
               </div>
@@ -342,8 +385,8 @@ export default function Overview() {
               icon={<CalendarDaysIcon className="w-5 h-5" />}
             />
             <StatCard
-              label="Suspended / Inactive"
-              value={stats ? stats.suspendedOrInactiveClients.toLocaleString() : "—"}
+              label="Suspended Clients"
+              value={stats ? stats.suspendedClients.toLocaleString() : "—"}
               accent="red"
               icon={<ExclamationTriangleIcon className="w-5 h-5" />}
             />
@@ -357,17 +400,25 @@ export default function Overview() {
       {/* Charts + Activity */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-        {/* Revenue trend chart (static placeholder — live data comes with reports endpoint) */}
+        {/* Live invoice trend chart */}
         <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="font-semibold text-slate-900 dark:text-slate-100">Invoice Volume Trend</h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Monthly invoice volume · full data available via Reports</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Live invoice volume across the platform</p>
             </div>
-            <span className="text-xs font-medium text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-3 py-1 rounded-full">2025</span>
+            <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
+              {(["monthly", "quarterly", "annual"] as TrendPeriod[]).map((item) => (
+                <button key={item} onClick={() => setTrendPeriod(item)} className={cn(
+                  "px-2.5 py-1 rounded-md text-xs font-medium capitalize transition",
+                  trendPeriod === item ? "bg-white dark:bg-slate-700 text-orange-600 shadow-sm" : "text-slate-500 dark:text-slate-400",
+                )}>{item}</button>
+              ))}
+            </div>
           </div>
+          {loading ? <Skeleton className="h-[220px] w-full" /> : (
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={revenueData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <AreaChart data={invoiceTrends[trendPeriod]} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ea580c" stopOpacity={0.18} />
@@ -375,15 +426,16 @@ export default function Overview() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
               <Tooltip
                 contentStyle={{ border: "none", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }}
                 formatter={(value) => [Number(value).toLocaleString(), "Invoices"]}
               />
-              <Area type="monotone" dataKey="invoices" stroke="#ea580c" strokeWidth={2.5} fill="url(#revGrad)" dot={false} activeDot={{ r: 5, fill: "#ea580c" }} />
+              <Area type="monotone" dataKey="count" stroke="#ea580c" strokeWidth={2.5} fill="url(#revGrad)" dot={false} activeDot={{ r: 5, fill: "#ea580c" }} />
             </AreaChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         {/* Recent client activity (live from API) */}
@@ -435,6 +487,52 @@ export default function Overview() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Client status distribution + environment transmission exports */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Client Status Distribution</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-3">CRM and dashboard onboarding status</p>
+          {loading ? <Skeleton className="h-56 w-full" /> : statusChartData.length === 0 ? (
+            <div className="h-56 flex items-center justify-center text-sm text-slate-400">No client status data</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={230}>
+              <PieChart>
+                <Pie data={statusChartData} dataKey="value" nameKey="label" innerRadius={52} outerRadius={78} paddingAngle={3}>
+                  {statusChartData.map((item) => <Cell key={item.key} fill={item.color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ border: "none", borderRadius: 12, fontSize: 12 }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Onboarded Client Transmissions</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-5">Download test and production client transmission data</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { key: "TEST-false", label: "Clients on Test", value: transmissionSummary.testClients, environment: "TEST" as const, transmitting: false },
+              { key: "TEST-true", label: "Transmitting on Test", value: transmissionSummary.testTransmitting, environment: "TEST" as const, transmitting: true },
+              { key: "PROD-false", label: "Clients on Prod", value: transmissionSummary.prodClients, environment: "PROD" as const, transmitting: false },
+              { key: "PROD-true", label: "Transmitting on Prod", value: transmissionSummary.prodTransmitting, environment: "PROD" as const, transmitting: true },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center gap-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                <div className="flex-1">
+                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{item.value.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{item.label}</p>
+                </div>
+                <button onClick={() => downloadClientCsv(item.environment, item.transmitting)} disabled={downloading === item.key}
+                  className="p-2.5 rounded-lg text-orange-600 bg-orange-50 dark:bg-orange-500/10 hover:bg-orange-100 dark:hover:bg-orange-500/20 disabled:opacity-50 transition"
+                  title={`Download ${item.label} CSV`}>
+                  <ArrowDownTrayIcon className={cn("w-4 h-4", downloading === item.key && "animate-pulse")} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

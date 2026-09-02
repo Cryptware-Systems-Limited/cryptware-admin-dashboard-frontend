@@ -53,4 +53,15 @@ export const api = {
   put: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(data) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  download: async (path: string) => {
+    const token = getToken();
+    const res = await fetch(`${getBaseUrl()}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.message ?? `Download failed: ${res.status}`);
+    }
+    return { blob: await res.blob() };
+  },
 };

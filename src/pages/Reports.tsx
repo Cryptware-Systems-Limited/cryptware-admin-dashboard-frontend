@@ -74,21 +74,24 @@ export default function Reports() {
   const [period, setPeriod]         = useState<Period>("month");
   const [fromDate, setFromDate]     = useState("");
   const [toDate, setToDate]         = useState("");
+  const [appliedCustomRange, setAppliedCustomRange] = useState<{ from: string; to: string } | null>(null);
   const [data, setData]             = useState<ReportData | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [sendingEmail, setSending]  = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     const params = new URLSearchParams();
-    if (period === "custom" && fromDate && toDate) {
-      params.set("from_date", fromDate);
-      params.set("to_date", toDate);
-    } else if (period !== "custom") {
+    if (period === "custom") {
+      const range = appliedCustomRange;
+      if (!range) return;
+      params.set("from_date", range.from);
+      params.set("to_date", range.to);
+    } else {
       params.set("period", period);
     }
+    setLoading(true);
+    setError(null);
     try {
       const res = await api.get<ReportResponse>(`/admin/reports?${params}`);
       setData(res.data);
@@ -97,16 +100,37 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [period, fromDate, toDate]);
+  }, [period, appliedCustomRange]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const request = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(request);
+  }, [load]);
+
+  function handleApplyCustomRange() {
+    if (!fromDate || !toDate) {
+      toast.error("Select both a start date and an end date.");
+      return;
+    }
+    if (fromDate > toDate) {
+      toast.error("Start date cannot be after end date.");
+      return;
+    }
+    setAppliedCustomRange({ from: fromDate, to: toDate });
+  }
 
   async function handleSendEmail() {
     setSending(true);
     const params = new URLSearchParams();
-    if (period === "custom" && fromDate && toDate) {
-      params.set("from_date", fromDate); params.set("to_date", toDate);
-    } else if (period !== "custom") {
+    if (period === "custom") {
+      if (!appliedCustomRange) {
+        toast.error("Apply a custom date range before emailing the report.");
+        setSending(false);
+        return;
+      }
+      params.set("from_date", appliedCustomRange.from);
+      params.set("to_date", appliedCustomRange.to);
+    } else {
       params.set("period", period);
     }
     try {
@@ -128,11 +152,11 @@ export default function Reports() {
     : [];
 
   const PERIODS: { key: Period; label: string }[] = [
-    { key: "day", label: "Today" },
-    { key: "week", label: "7 Days" },
+    { key: "day", label: "Day" },
+    { key: "week", label: "Week" },
     { key: "month", label: "Month" },
     { key: "year", label: "Year" },
-    { key: "custom", label: "Custom" },
+    { key: "custom", label: "Custom Range" },
   ];
 
   return (
@@ -163,6 +187,8 @@ export default function Reports() {
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
+              max={toDate || new Date().toISOString().slice(0, 10)}
+              aria-label="Report start date"
               className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30"
             />
             <span className="text-slate-400 text-sm">to</span>
@@ -170,11 +196,14 @@ export default function Reports() {
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
+              min={fromDate || undefined}
+              max={new Date().toISOString().slice(0, 10)}
+              aria-label="Report end date"
               className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-400/30"
             />
             <button
-              onClick={load}
-              disabled={!fromDate || !toDate}
+              onClick={handleApplyCustomRange}
+              disabled={!fromDate || !toDate || fromDate > toDate || (appliedCustomRange?.from === fromDate && appliedCustomRange?.to === toDate)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-all"
             >
               <ArrowPathIcon className="w-3.5 h-3.5" /> Apply
@@ -219,8 +248,8 @@ export default function Reports() {
         {[
           { label: "Total Clients", value: data?.stats.totalClientsAllTime, icon: <UsersIcon className="w-5 h-5" />, accent: "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" },
           { label: "Invoices (Period)", value: data?.stats.invoicesInPeriod, icon: <DocumentTextIcon className="w-5 h-5" />, accent: "border-orange-500 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400" },
-          { label: "Active Clients", value: data?.stats.activeClientsInPeriod, icon: <UsersIcon className="w-5 h-5" />, accent: "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-          { label: "Inactive Clients", value: data?.stats.inactiveClientsInPeriod, icon: <ExclamationTriangleIcon className="w-5 h-5" />, accent: "border-red-500 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400" },
+          { label: "Clients With Invoice Activity", value: data?.stats.activeClientsInPeriod, icon: <UsersIcon className="w-5 h-5" />, accent: "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+          { label: "Clients Without Invoice Activity", value: data?.stats.inactiveClientsInPeriod, icon: <ExclamationTriangleIcon className="w-5 h-5" />, accent: "border-red-500 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400" },
         ].map((card) => (
           <div key={card.label} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
             {loading ? (

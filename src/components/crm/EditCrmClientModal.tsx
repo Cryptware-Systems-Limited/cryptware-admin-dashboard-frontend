@@ -17,7 +17,6 @@ const LABEL_CLASS = "block text-xs font-semibold text-slate-500 dark:text-slate-
 
 export default function EditCrmClientModal({ client, onClose, onSaved }: EditCrmClientModalProps) {
   const m = client.dashboardMigration;
-  const p = client.platformActivity;
 
   const projectStatusToDb: Record<string, string> = {
     Live: "LIVE", "In Progress": "IN_PROGRESS", Blocked: "BLOCKED", "Not Started": "NOT_STARTED",
@@ -119,7 +118,7 @@ export default function EditCrmClientModal({ client, onClose, onSaved }: EditCrm
               <label className={LABEL_CLASS}>RAG Status</label>
               <select
                 value={form.ragStatus}
-                onChange={(e) => set("ragStatus", e.target.value)}
+                onChange={(e) => set("ragStatus", e.target.value as typeof form.ragStatus)}
                 className={FIELD_CLASS}
               >
                 <option value="GREEN">Green — On Track</option>
