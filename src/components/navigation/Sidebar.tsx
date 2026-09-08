@@ -10,6 +10,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ExclamationTriangleIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeSolid,
@@ -17,9 +18,11 @@ import {
   UsersIcon as UsersSolid,
   GlobeAltIcon as GlobeSolid,
   DocumentTextIcon as DocSolid,
+  Cog6ToothIcon as CogSolid,
 } from "@heroicons/react/24/solid";
 import { cn } from "@/lib/utils";
 import { useEnv, type AppEnv } from "@/context/EnvContext";
+import { useAuth } from "@/context/AuthContext";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/overview", icon: HomeIcon, iconActive: HomeSolid },
@@ -28,6 +31,8 @@ const NAV_ITEMS = [
   { label: "Geographic Coverage", href: "/geographic-coverage", icon: GlobeAltIcon, iconActive: GlobeSolid },
   { label: "Invoice Monitoring", href: "/invoice-monitoring", icon: DocumentTextIcon, iconActive: DocSolid },
 ];
+
+const SETTINGS_ITEM = { label: "Settings", href: "/settings", icon: Cog6ToothIcon, iconActive: CogSolid };
 
 interface SidebarProps {
   collapsed: boolean;
@@ -38,6 +43,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { env, isProd, switchEnv } = useEnv();
+  const { role } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingEnv, setPendingEnv] = useState<AppEnv | null>(null);
 
@@ -89,7 +95,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
-        {NAV_ITEMS.map((item) => {
+        {[...NAV_ITEMS, ...(role === "SYSTEM_ADMIN" ? [SETTINGS_ITEM] : [])].map((item) => {
           const isActive =
             item.href === "/clients"
               ? isClientsActive

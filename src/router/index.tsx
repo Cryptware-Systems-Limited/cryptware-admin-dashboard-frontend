@@ -8,6 +8,8 @@ import Clients from "@/pages/Clients";
 import ClientProfile from "@/pages/ClientProfile";
 import GeographicCoverage from "@/pages/GeographicCoverage";
 import InvoiceMonitoring from "@/pages/InvoiceMonitoring";
+import Settings from "@/pages/Settings";
+import SystemAdminRoute from "@/components/SystemAdminRoute";
 import NotFound from "@/pages/NotFound";
 
 export const router = createBrowserRouter([
@@ -29,6 +31,14 @@ export const router = createBrowserRouter([
           { path: "clients/:id", element: <ClientProfile /> },
           { path: "geographic-coverage", element: <GeographicCoverage /> },
           { path: "invoice-monitoring", element: <InvoiceMonitoring /> },
+          {
+            path: "settings",
+            element: (
+              <SystemAdminRoute>
+                <Settings />
+              </SystemAdminRoute>
+            ),
+          },
         ],
       },
     ],
