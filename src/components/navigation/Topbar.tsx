@@ -251,7 +251,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-tight">
             {role ? ROLE_LABEL[role] : 'Admin'}
           </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">admin@cryptware.io</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">eegbowon@cryptwaresystems.com</p>
         </div>
 
         <button

@@ -416,8 +416,9 @@ export default function Overview() {
               ))}
             </div>
           </div>
-          {loading ? <Skeleton className="h-[220px] w-full" /> : (
-          <ResponsiveContainer width="100%" height={220}>
+          {loading ? <Skeleton className="h-[280px] xl:h-[330px] w-full" /> : (
+          <div className="h-[280px] xl:h-[330px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={invoiceTrends[trendPeriod]} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -435,6 +436,7 @@ export default function Overview() {
               <Area type="monotone" dataKey="count" stroke="#ea580c" strokeWidth={2.5} fill="url(#revGrad)" dot={false} activeDot={{ r: 5, fill: "#ea580c" }} />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
           )}
         </div>
 
@@ -463,7 +465,7 @@ export default function Overview() {
               No recent activity
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 xl:flex-1 xl:min-h-0 xl:overflow-y-auto xl:pr-2">
               {activity.map((item) => (
                 <div key={item.id} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 shrink-0">
@@ -492,7 +494,7 @@ export default function Overview() {
 
       {/* Client status distribution + environment transmission exports */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div className="xl:h-[430px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Client Status Distribution</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-3">CRM and dashboard onboarding status</p>
           {loading ? <Skeleton className="h-56 w-full" /> : statusChartData.length === 0 ? (
@@ -510,7 +512,7 @@ export default function Overview() {
           )}
         </div>
 
-        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div className="xl:col-span-2 xl:h-[430px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Onboarded Client Transmissions</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-5">Download test and production client transmission data</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

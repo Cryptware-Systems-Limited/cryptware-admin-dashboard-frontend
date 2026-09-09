@@ -19,14 +19,23 @@ interface AuthUser {
 interface LoginResponse {
   status: string;
   data: {
-    token: string;
-    refreshToken: string;
-    role: string;
-    expiresAt: string;
-    mustChangePassword: boolean;
-    business_name: string;
+    token?: string;
+    refreshToken?: string;
+    role?: string;
+    expiresAt?: string;
+    mustChangePassword?: boolean;
+    business_name?: string;
+    mfaRequired?: boolean;
+    mfaSetupRequired?: boolean;
+    challengeToken?: string;
+    backupCodes?: string[];
   };
 }
+
+export type LoginResult =
+  | { status: 'authenticated' }
+  | { status: 'mfa-required'; challengeToken: string }
+  | { status: 'mfa-setup-required'; challengeToken: string };
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -35,7 +44,11 @@ interface AuthContextValue {
   // Permissions derived from role
   canWrite: boolean;    // SYSTEM_ADMIN + SYSTEM_DEVELOPER
   canSuspend: boolean;  // SYSTEM_ADMIN only
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  verifyMfa: (challengeToken: string, code: string) => Promise<void>;
+  startMfaSetup: (challengeToken: string) => Promise<void>;
+  activateMfa: (challengeToken: string, code: string) => Promise<string[]>;
+  resendMfaCode: (challengeToken: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -70,9 +83,12 @@ function loadStoredAuth(): AuthUser | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(loadStoredAuth);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.post<LoginResponse>('/auth/login', { email, password });
-    const { token, refreshToken, role, expiresAt } = res.data;
+  const storeSession = useCallback((data: LoginResponse['data']) => {
+    const { token, refreshToken, role, expiresAt } = data;
+
+    if (!token || !refreshToken || !role || !expiresAt) {
+      throw new Error('The server did not return a complete login session.');
+    }
 
     if (!ADMIN_ROLES.includes(role as AdminRole)) {
       throw new Error('Access denied. This dashboard is for admin users only.');
@@ -91,6 +107,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('cw_expires_at', expiresAt);
 
     setUser(authUser);
+  }, []);
+
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+    const res = await api.post<LoginResponse>('/auth/login', { email, password });
+    const data = res.data;
+
+    if (data.mfaSetupRequired && data.challengeToken) {
+      return { status: 'mfa-setup-required', challengeToken: data.challengeToken };
+    }
+    if (data.mfaRequired && data.challengeToken) {
+      return { status: 'mfa-required', challengeToken: data.challengeToken };
+    }
+
+    storeSession(data);
+    return { status: 'authenticated' };
+  }, [storeSession]);
+
+  const verifyMfa = useCallback(async (challengeToken: string, code: string) => {
+    const res = await api.post<LoginResponse>('/auth/mfa/verify', { challengeToken, code });
+    storeSession(res.data);
+  }, [storeSession]);
+
+  const startMfaSetup = useCallback(async (challengeToken: string) => {
+    await api.post('/auth/mfa/enable', { challengeToken });
+  }, []);
+
+  const activateMfa = useCallback(async (challengeToken: string, code: string) => {
+    const res = await api.post<LoginResponse>('/auth/mfa/activate', { challengeToken, code });
+    storeSession(res.data);
+    return res.data.backupCodes ?? [];
+  }, [storeSession]);
+
+  const resendMfaCode = useCallback(async (challengeToken: string) => {
+    await api.post('/auth/mfa/resend-otp', { challengeToken });
   }, []);
 
   const logout = useCallback(() => {
@@ -112,6 +162,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canWrite: role === 'SYSTEM_ADMIN' || role === 'SYSTEM_DEVELOPER',
         canSuspend: role === 'SYSTEM_ADMIN',
         login,
+        verifyMfa,
+        startMfaSetup,
+        activateMfa,
+        resendMfaCode,
         logout,
       }}
     >

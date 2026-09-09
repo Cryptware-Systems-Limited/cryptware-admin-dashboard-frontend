@@ -47,6 +47,8 @@ interface OnboardedClient {
   lastInvoiceDate: string | null;
   activityLevel: ActivityLevel;
   serviceCategory: ServiceCategory;
+  dashboardAccessEnabled: boolean;
+  apiAccessEnabled: boolean;
   credentialEnvironment: CredentialEnvironment;
 }
 
@@ -154,9 +156,9 @@ const SERVICE_CATEGORY_BADGE: Record<ServiceCategory, string> = {
 };
 
 const SERVICE_CATEGORY_LABEL: Record<ServiceCategory, string> = {
-  DASHBOARD: "Dashboard",
-  ERP:       "ERP",
-  BOTH:      "Dashboard + ERP",
+  DASHBOARD: "Dashboard only",
+  ERP:       "API only",
+  BOTH:      "Dashboard + API",
 };
 
 const CRED_ENV_BADGE: Record<CredentialEnvironment, string> = {
@@ -255,6 +257,7 @@ export default function Clients() {
   const [onboardedError, setOnboardedError] = useState<string | null>(null);
   const [invoiceActivityFilter, setInvoiceActivityFilter] = useState<string>("All");
   const [activityLevelFilter, setActivityLevelFilter] = useState<string>("All");
+  const [onboardedServiceFilter, setOnboardedServiceFilter] = useState<ServiceCategory | "All">("All");
   const [invoiceSort, setInvoiceSort] = useState<"none" | "asc" | "desc">("none");
   const [onboardedFrom, setOnboardedFrom] = useState<string>("");
   const [onboardedTo, setOnboardedTo] = useState<string>("");
@@ -268,6 +271,7 @@ export default function Clients() {
     invoiceOrder: string,
     dateFrom: string,
     dateTo: string,
+    serviceCategory: string,
   ) => {
     setOnboardedLoading(true);
     setOnboardedError(null);
@@ -282,6 +286,7 @@ export default function Clients() {
       if (geographicState) params.set("state", geographicState);
       if (dateFrom) params.set("onboardedFrom", dateFrom);
       if (dateTo) params.set("onboardedTo", dateTo);
+      if (serviceCategory !== "All") params.set("serviceCategory", serviceCategory);
       const res = await api.get<OnboardedResponse>(`/admin/clients/onboarded?${params.toString()}`);
       setOnboardedClients(res.data.clients);
       setOnboardedStats(res.data.stats);
@@ -295,9 +300,9 @@ export default function Clients() {
 
   useEffect(() => {
     if (activeTab === "onboarded") {
-      fetchOnboarded(onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo);
+      fetchOnboarded(onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo, onboardedServiceFilter);
     }
-  }, [activeTab, onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo, fetchOnboarded]);
+  }, [activeTab, onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo, onboardedServiceFilter, fetchOnboarded]);
 
   // ── Stats (from API) ───────────────────────────────────────────────────────
   const total      = crmStats?.total ?? 0;
@@ -799,6 +804,17 @@ export default function Clients() {
             </select>
 
             <select
+              value={onboardedServiceFilter}
+              onChange={(e) => { setOnboardedServiceFilter(e.target.value as ServiceCategory | "All"); setOnboardedPage(1); }}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
+            >
+              <option value="All">All Service Types</option>
+              <option value="DASHBOARD">Dashboard only</option>
+              <option value="ERP">API only</option>
+              <option value="BOTH">Dashboard + API</option>
+            </select>
+
+            <select
               value={invoiceSort}
               onChange={(e) => { setInvoiceSort(e.target.value as "none" | "asc" | "desc"); setOnboardedPage(1); }}
               className="px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer"
@@ -824,9 +840,9 @@ export default function Clients() {
               />
             </div>
 
-            {(onboardedSearch || onboardedStatusFilter !== "All" || invoiceActivityFilter !== "All" || activityLevelFilter !== "All" || invoiceSort !== "none" || onboardedFrom || onboardedTo) && (
+            {(onboardedSearch || onboardedStatusFilter !== "All" || invoiceActivityFilter !== "All" || activityLevelFilter !== "All" || onboardedServiceFilter !== "All" || invoiceSort !== "none" || onboardedFrom || onboardedTo) && (
               <button
-                onClick={() => { setOnboardedSearch(""); setOnboardedStatusFilter("All"); setInvoiceActivityFilter("All"); setActivityLevelFilter("All"); setInvoiceSort("none"); setOnboardedFrom(""); setOnboardedTo(""); setOnboardedPage(1); }}
+                onClick={() => { setOnboardedSearch(""); setOnboardedStatusFilter("All"); setInvoiceActivityFilter("All"); setActivityLevelFilter("All"); setOnboardedServiceFilter("All"); setInvoiceSort("none"); setOnboardedFrom(""); setOnboardedTo(""); setOnboardedPage(1); }}
                 className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-2.5 transition-colors"
               >
                 Clear all

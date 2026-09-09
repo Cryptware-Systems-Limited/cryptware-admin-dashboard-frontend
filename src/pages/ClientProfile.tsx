@@ -48,6 +48,8 @@ interface ClientProfileData {
     inactivityWarningAt: string | null;
     serviceCategory: "DASHBOARD" | "ERP" | "BOTH";
     credentialEnvironment: "TEST" | "PROD" | "BOTH";
+    dashboardAccessEnabled: boolean;
+    apiAccessEnabled: boolean;
   };
   invoiceStats: {
     total: number;
@@ -303,6 +305,7 @@ export default function ClientProfile() {
   const [client, setClient] = useState<Client | undefined>(original);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [suspendConfirmOpen, setSuspendConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -846,18 +849,7 @@ export default function ClientProfile() {
                 ) : (
                   <button
                     disabled={actionLoading}
-                    onClick={async () => {
-                      setActionLoading(true);
-                      setActionError(null);
-                      try {
-                        await api.post(`/admin/organizations/${id}/suspend`);
-                        setApiProfile((p) => p && { ...p, overview: { ...p.overview, status: "Suspended" } });
-                      } catch (err) {
-                        setActionError(err instanceof Error ? err.message : "Failed to suspend client");
-                      } finally {
-                        setActionLoading(false);
-                      }
-                    }}
+                    onClick={() => { setActionError(null); setSuspendConfirmOpen(true); }}
                     className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all shadow-sm shadow-red-600/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                   >
                     {actionLoading ? "Suspending…" : "Suspend Client"}
@@ -888,50 +880,76 @@ export default function ClientProfile() {
                     {metaError}
                   </div>
                 )}
-                <div className="flex flex-wrap items-end gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Service Type</label>
+                <div className="space-y-5">
+                  <div className="max-w-sm space-y-2">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200">Service type</label>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Choose how this client connects to Cryptware.</p>
+                    </div>
                     <select
                       disabled={metaLoading}
                       defaultValue={ov.serviceCategory}
                       onChange={async (e) => {
                         setMetaLoading(true); setMetaError(null);
                         try {
-                          await api.put(`/admin/organizations/${id}/onboarding-meta`, { serviceCategory: e.target.value });
+                          await api.patch(`/admin/organizations/${id}/onboarding-meta`, { serviceCategory: e.target.value });
                           setApiProfile((p) => p && { ...p, overview: { ...p.overview, serviceCategory: e.target.value as typeof ov.serviceCategory } });
                         } catch (err) {
                           setMetaError(err instanceof Error ? err.message : "Failed to update");
                         } finally { setMetaLoading(false); }
                       }}
-                      className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer disabled:opacity-50"
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer disabled:opacity-50"
                     >
                       <option value="DASHBOARD">Dashboard only</option>
-                      <option value="ERP">ERP / API only</option>
-                      <option value="BOTH">Both</option>
+                      <option value="ERP">API only</option>
+                      <option value="BOTH">Dashboard + API</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Credential Environment</label>
-                    <select
-                      disabled={metaLoading}
-                      defaultValue={ov.credentialEnvironment}
-                      onChange={async (e) => {
-                        setMetaLoading(true); setMetaError(null);
-                        try {
-                          await api.put(`/admin/organizations/${id}/onboarding-meta`, { credentialEnvironment: e.target.value });
-                          setApiProfile((p) => p && { ...p, overview: { ...p.overview, credentialEnvironment: e.target.value as typeof ov.credentialEnvironment } });
-                        } catch (err) {
-                          setMetaError(err instanceof Error ? err.message : "Failed to update");
-                        } finally { setMetaLoading(false); }
-                      }}
-                      className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition cursor-pointer disabled:opacity-50"
-                    >
-                      <option value="TEST">Test only (preprod)</option>
-                      <option value="PROD">Production only</option>
-                      <option value="BOTH">Both (test + prod)</option>
-                    </select>
-                  </div>
-                  {metaLoading && <p className="text-xs text-slate-400 dark:text-slate-500 pb-2">Saving…</p>}
+                  {ov.serviceCategory === "BOTH" && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/30 p-4">
+                      <div className="mb-3">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Channel access</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Turn each access channel on or off independently.</p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                      {([
+                        ["dashboardAccessEnabled", "Dashboard access", "Allow users to sign in and use the dashboard.", ov.dashboardAccessEnabled],
+                        ["apiAccessEnabled", "API access", "Allow this organisation’s API keys to authenticate.", ov.apiAccessEnabled],
+                      ] as const).map(([field, label, description, enabled]) => (
+                        <button
+                          key={field}
+                          type="button"
+                          role="switch"
+                          aria-checked={enabled}
+                          aria-label={`${label}: ${enabled ? "enabled" : "disabled"}`}
+                          disabled={metaLoading || !canSuspend}
+                          onClick={async () => {
+                            setMetaLoading(true); setMetaError(null);
+                            try {
+                              await api.patch(`/admin/organizations/${id}/channel-access`, { [field]: !enabled });
+                              setApiProfile((p) => p && { ...p, overview: { ...p.overview, [field]: !enabled } });
+                            } catch (err) {
+                              setMetaError(err instanceof Error ? err.message : `Failed to update ${label.toLowerCase()}`);
+                            } finally { setMetaLoading(false); }
+                          }}
+                          className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-left transition hover:border-orange-300 dark:hover:border-orange-500/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <span>
+                            <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">{label}</span>
+                            <span className="mt-0.5 block text-xs font-normal text-slate-500 dark:text-slate-400">{description}</span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className={cn("relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors", enabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600")}>
+                              <span className={cn("absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200", enabled ? "translate-x-5" : "translate-x-0")} />
+                            </span>
+                            <span className={cn("min-w-12 text-right text-[11px] font-semibold", enabled ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500")}>{enabled ? "Enabled" : "Disabled"}</span>
+                          </span>
+                        </button>
+                      ))}
+                      </div>
+                    </div>
+                  )}
+                  {metaLoading && <p className="text-xs text-slate-400 dark:text-slate-500">Saving…</p>}
                 </div>
               </div>
 
@@ -956,6 +974,56 @@ export default function ClientProfile() {
         </SectionCard>
 
         {/* ── Delete Confirmation Modal ── */}
+        {suspendConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="suspend-dialog-title">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full p-6 space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/10 flex items-center justify-center shrink-0">
+                  <ShieldExclamationIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h2 id="suspend-dialog-title" className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">Suspend client?</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Suspending <strong className="text-slate-800 dark:text-slate-200">{ov.businessName}</strong> will immediately block all dashboard logins and API-key access. You can reactivate the client later.
+                  </p>
+                </div>
+              </div>
+
+              {actionError && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-xs">
+                  <ShieldExclamationIcon className="w-3.5 h-3.5 shrink-0" />
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end pt-1">
+                <button onClick={() => setSuspendConfirmOpen(false)} disabled={actionLoading} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50">
+                  Cancel
+                </button>
+                <button
+                  disabled={actionLoading}
+                  onClick={async () => {
+                    setActionLoading(true);
+                    setActionError(null);
+                    try {
+                      await api.post(`/admin/organizations/${id}/suspend`);
+                      setApiProfile((p) => p && { ...p, overview: { ...p.overview, status: "Suspended" } });
+                      setSuspendConfirmOpen(false);
+                    } catch (err) {
+                      setActionError(err instanceof Error ? err.message : "Failed to suspend client");
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all shadow-sm shadow-red-600/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                >
+                  {actionLoading ? "Suspending…" : "Yes, Suspend Client"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {deleteConfirmOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full p-6 space-y-4">

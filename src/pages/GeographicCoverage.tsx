@@ -367,9 +367,9 @@ export default function GeographicCoverage() {
                 className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/30 cursor-pointer"
               >
                 <option value="All">All Service Types</option>
-                <option value="DASHBOARD">Dashboard</option>
-                <option value="ERP">ERP</option>
-                <option value="BOTH">Both</option>
+                <option value="DASHBOARD">Dashboard only</option>
+                <option value="ERP">API only</option>
+                <option value="BOTH">Dashboard + API</option>
               </select>
             </>
           )}
