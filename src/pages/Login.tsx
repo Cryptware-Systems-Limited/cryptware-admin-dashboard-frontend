@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { ArrowLeftIcon, EyeIcon, EyeSlashIcon, LockClosedIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
@@ -10,6 +10,7 @@ type LoginStep = 'credentials' | 'setup' | 'verify' | 'backup-codes';
 export default function Login() {
   const { login, verifyMfa, startMfaSetup, activateMfa, resendMfaCode } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +19,12 @@ export default function Login() {
   const [code, setCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('passwordChanged') !== 'true') return;
+    toast.success('Password changed successfully. Sign in with your new password.');
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   function resetLogin() {
     setStep('credentials');

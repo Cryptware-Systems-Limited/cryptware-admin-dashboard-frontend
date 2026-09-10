@@ -14,6 +14,7 @@ interface AuthUser {
   refreshToken: string;
   role: AdminRole;
   expiresAt: string;
+  mustChangePassword: boolean;
 }
 
 interface LoginResponse {
@@ -62,6 +63,7 @@ function loadStoredAuth(): AuthUser | null {
     const refreshToken = localStorage.getItem('cw_refresh_token');
     const role = localStorage.getItem('cw_role') as AdminRole | null;
     const expiresAt = localStorage.getItem('cw_expires_at');
+    const mustChangePassword = localStorage.getItem('cw_must_change_password') === 'true';
 
     if (!token || !role || !ADMIN_ROLES.includes(role)) return null;
 
@@ -74,7 +76,7 @@ function loadStoredAuth(): AuthUser | null {
       return null;
     }
 
-    return { token, refreshToken: refreshToken ?? '', role, expiresAt: expiresAt ?? '' };
+    return { token, refreshToken: refreshToken ?? '', role, expiresAt: expiresAt ?? '', mustChangePassword };
   } catch {
     return null;
   }
@@ -84,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(loadStoredAuth);
 
   const storeSession = useCallback((data: LoginResponse['data']) => {
-    const { token, refreshToken, role, expiresAt } = data;
+    const { token, refreshToken, role, expiresAt, mustChangePassword = false } = data;
 
     if (!token || !refreshToken || !role || !expiresAt) {
       throw new Error('The server did not return a complete login session.');
@@ -99,12 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshToken,
       role: role as AdminRole,
       expiresAt,
+      mustChangePassword,
     };
 
     localStorage.setItem('cw_token', token);
     localStorage.setItem('cw_refresh_token', refreshToken);
     localStorage.setItem('cw_role', role);
     localStorage.setItem('cw_expires_at', expiresAt);
+    localStorage.setItem('cw_must_change_password', String(mustChangePassword));
 
     setUser(authUser);
   }, []);
@@ -148,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('cw_refresh_token');
     localStorage.removeItem('cw_role');
     localStorage.removeItem('cw_expires_at');
+    localStorage.removeItem('cw_must_change_password');
     setUser(null);
   }, []);
 

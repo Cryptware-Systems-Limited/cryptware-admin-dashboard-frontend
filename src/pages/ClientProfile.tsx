@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeftIcon,
   BuildingOfficeIcon,
@@ -285,6 +285,8 @@ function ProfileSkeleton() {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? "/clients";
   const { canWrite, canSuspend } = useAuth();
 
   // API-powered profile state (onboarded clients)
@@ -360,7 +362,7 @@ export default function ClientProfile() {
 
         {/* Back */}
         <button
-          onClick={() => navigate("/clients")}
+          onClick={() => navigate(returnTo)}
           className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-500 transition-colors active:scale-95"
         >
           <ArrowLeftIcon className="w-4 h-4" />
@@ -1061,7 +1063,7 @@ export default function ClientProfile() {
                     setDeleteError(null);
                     try {
                       await api.delete(`/admin/organizations/${id}/hard-delete`);
-                      navigate("/clients");
+                      navigate(returnTo);
                     } catch (err) {
                       setDeleteError(err instanceof Error ? err.message : "Failed to delete organisation");
                       setDeleteLoading(false);
@@ -1086,7 +1088,7 @@ export default function ClientProfile() {
       <div className="flex flex-col items-center justify-center h-64 text-slate-400">
         <p className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-1">Client not found</p>
         <p className="text-sm mb-4">No client with ID: {id}</p>
-        <button onClick={() => navigate("/clients")} className="text-sm text-orange-600 font-semibold hover:underline">
+        <button onClick={() => navigate(returnTo)} className="text-sm text-orange-600 font-semibold hover:underline">
           ← Back to Clients
         </button>
       </div>
@@ -1102,7 +1104,7 @@ export default function ClientProfile() {
 
       {/* ── Back ── */}
       <button
-        onClick={() => navigate("/clients")}
+        onClick={() => navigate(returnTo)}
         className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-500 transition-colors active:scale-95"
       >
         <ArrowLeftIcon className="w-4 h-4" />

@@ -27,6 +27,16 @@ async function request<T>(
 
   const body = await res.json().catch(() => ({}));
 
+  if (
+    res.status === 403 &&
+    path !== '/auth/change-password' &&
+    typeof body?.message === 'string' &&
+    body.message.toLowerCase().includes('change your password')
+  ) {
+    window.location.replace('/change-password');
+    throw new Error('Please change your temporary password before continuing.');
+  }
+
   if (res.status === 401) {
     // Only redirect if we had an active session — not on a fresh login attempt
     if (localStorage.getItem('cw_token')) {

@@ -11,6 +11,7 @@ import InvoiceMonitoring from "@/pages/InvoiceMonitoring";
 import Settings from "@/pages/Settings";
 import SystemAdminRoute from "@/components/SystemAdminRoute";
 import NotFound from "@/pages/NotFound";
+import ChangePassword from "@/pages/ChangePassword";
 
 export const router = createBrowserRouter([
   // Public
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      { path: "/change-password", element: <ChangePassword /> },
       {
         path: "/",
         element: <DashboardLayout />,

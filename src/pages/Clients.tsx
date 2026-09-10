@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import {
   MagnifyingGlassIcon,
@@ -8,6 +8,8 @@ import {
   ChevronDownIcon,
   PlusIcon,
   PencilSquareIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import EditCrmClientModal from "@/components/crm/EditCrmClientModal";
 import AddCrmClientModal from "@/components/crm/AddCrmClientModal";
@@ -21,12 +23,13 @@ import {
 } from "@/components/ui/table";
 import { type Client, type ProjectStatus, type RAGStatus, type ServiceType } from "@/data/clients";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortField = "name" | "erpSystem" | "projectStatus" | "ragStatus";
 type SortDir = "asc" | "desc";
 type ActiveTab = "master" | "migration" | "onboarded";
-type OnboardedStatus = "Active" | "Suspended" | "Inactive Warning";
+type OnboardedStatus = "Active" | "Suspended" | "Inactive Warning" | "Deleted";
 type ActivityLevel = "High" | "Medium" | "Low" | "Inactive";
 
 type ServiceCategory = "DASHBOARD" | "ERP" | "BOTH";
@@ -141,12 +144,14 @@ const ONBOARDED_STATUS_BADGE: Record<OnboardedStatus, string> = {
   "Active":           "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20",
   "Suspended":        "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20",
   "Inactive Warning": "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20",
+  "Deleted":          "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
 };
 
 const ONBOARDED_STATUS_DOT: Record<OnboardedStatus, string> = {
   "Active":           "bg-emerald-500",
   "Suspended":        "bg-red-500",
   "Inactive Warning": "bg-amber-400",
+  "Deleted":          "bg-slate-400",
 };
 
 const SERVICE_CATEGORY_BADGE: Record<ServiceCategory, string> = {
@@ -193,7 +198,9 @@ function SortIcon({ field, active, dir }: { field: SortField; active: SortField;
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Clients() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const { canSuspend } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const geographicZone = searchParams.get("zone") ?? "";
   const geographicState = searchParams.get("state") ?? "";
 
@@ -245,22 +252,49 @@ export default function Clients() {
   const [onboardedClients, setOnboardedClients] = useState<OnboardedClient[]>([]);
   const [onboardedStats, setOnboardedStats] = useState<OnboardedStats | null>(null);
   const [onboardedPagination, setOnboardedPagination] = useState({ page: 1, totalPages: 1, total: 0 });
-  const [onboardedSearch, setOnboardedSearch] = useState("");
+  const [onboardedSearch, setOnboardedSearch] = useState(() => searchParams.get("q") ?? "");
   const [onboardedStatusFilter, setOnboardedStatusFilter] = useState<OnboardedStatus | "All">(() => {
     const s = searchParams.get("status");
-    if (s === "Suspended") return "Suspended";
+    if (s === "Active" || s === "Suspended" || s === "Inactive Warning" || s === "Deleted") return s;
     if (s === "warning") return "Inactive Warning";
     return "All";
   });
-  const [onboardedPage, setOnboardedPage] = useState(1);
+  const [onboardedPage, setOnboardedPage] = useState(() => Math.max(1, Number(searchParams.get("page")) || 1));
   const [onboardedLoading, setOnboardedLoading] = useState(false);
   const [onboardedError, setOnboardedError] = useState<string | null>(null);
-  const [invoiceActivityFilter, setInvoiceActivityFilter] = useState<string>("All");
-  const [activityLevelFilter, setActivityLevelFilter] = useState<string>("All");
-  const [onboardedServiceFilter, setOnboardedServiceFilter] = useState<ServiceCategory | "All">("All");
-  const [invoiceSort, setInvoiceSort] = useState<"none" | "asc" | "desc">("none");
-  const [onboardedFrom, setOnboardedFrom] = useState<string>("");
-  const [onboardedTo, setOnboardedTo] = useState<string>("");
+  const [invoiceActivityFilter, setInvoiceActivityFilter] = useState<string>(() => searchParams.get("activity") ?? "All");
+  const [activityLevelFilter, setActivityLevelFilter] = useState<string>(() => searchParams.get("level") ?? "All");
+  const [onboardedServiceFilter, setOnboardedServiceFilter] = useState<ServiceCategory | "All">(() => {
+    const value = searchParams.get("serviceCategory");
+    return value === "DASHBOARD" || value === "ERP" || value === "BOTH" ? value : "All";
+  });
+  const [invoiceSort, setInvoiceSort] = useState<"none" | "asc" | "desc">(() => {
+    const value = searchParams.get("invoiceSort");
+    return value === "asc" || value === "desc" ? value : "none";
+  });
+  const [onboardedFrom, setOnboardedFrom] = useState<string>(() => searchParams.get("from") ?? "");
+  const [onboardedTo, setOnboardedTo] = useState<string>(() => searchParams.get("to") ?? "");
+  const [reactivateClient, setReactivateClient] = useState<OnboardedClient | null>(null);
+  const [reactivating, setReactivating] = useState(false);
+  const [reactivateError, setReactivateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== "onboarded") return;
+    const next = new URLSearchParams();
+    next.set("tab", "onboarded");
+    if (onboardedSearch) next.set("q", onboardedSearch);
+    if (onboardedStatusFilter !== "All") next.set("status", onboardedStatusFilter);
+    if (invoiceActivityFilter !== "All") next.set("activity", invoiceActivityFilter);
+    if (activityLevelFilter !== "All") next.set("level", activityLevelFilter);
+    if (onboardedServiceFilter !== "All") next.set("serviceCategory", onboardedServiceFilter);
+    if (invoiceSort !== "none") next.set("invoiceSort", invoiceSort);
+    if (onboardedFrom) next.set("from", onboardedFrom);
+    if (onboardedTo) next.set("to", onboardedTo);
+    if (onboardedPage > 1) next.set("page", String(onboardedPage));
+    if (geographicZone) next.set("zone", geographicZone);
+    if (geographicState) next.set("state", geographicState);
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [activeTab, onboardedSearch, onboardedStatusFilter, invoiceActivityFilter, activityLevelFilter, onboardedServiceFilter, invoiceSort, onboardedFrom, onboardedTo, onboardedPage, geographicZone, geographicState, searchParams, setSearchParams]);
 
   const fetchOnboarded = useCallback(async (
     search: string,
@@ -881,6 +915,7 @@ export default function Clients() {
                   >
                     Invoices {invoiceSort === "asc" ? "↑" : invoiceSort === "desc" ? "↓" : "↕"}
                   </TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -897,18 +932,19 @@ export default function Clients() {
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : onboardedClients.length === 0 ? (
                   <TableRow className="hover:bg-transparent dark:hover:bg-transparent cursor-default">
-                    <TableCell colSpan={11} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+                    <TableCell colSpan={12} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
                       No onboarded clients match the current filters.
                     </TableCell>
                   </TableRow>
                 ) : (
                   onboardedClients.map((client) => (
-                    <TableRow key={client.id} onClick={() => navigate(`/clients/${client.id}`)}>
+                    <TableRow key={client.id} onClick={() => navigate(`/clients/${client.id}`, { state: { returnTo: `${location.pathname}${location.search}` } })}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div
@@ -971,6 +1007,21 @@ export default function Clients() {
                       <TableCell className="text-center text-xs font-semibold text-slate-700 dark:text-slate-300">
                         {client.totalInvoices.toLocaleString()}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {client.status === "Suspended" && canSuspend && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setReactivateError(null);
+                              setReactivateClient(client);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-400"
+                          >
+                            <ArrowPathIcon className="h-3.5 w-3.5" /> Reactivate
+                          </button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -1006,6 +1057,51 @@ export default function Clients() {
       )}
 
       {/* ── Modals ── */}
+      {reactivateClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="reactivate-client-title">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/10">
+                <ArrowPathIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <h2 id="reactivate-client-title" className="mb-1 text-base font-bold text-slate-900 dark:text-slate-100">Reactivate client?</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">This will restore platform access for <strong className="text-slate-800 dark:text-slate-200">{reactivateClient.businessName}</strong>.</p>
+              </div>
+            </div>
+            {reactivateError && (
+              <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+                <ExclamationTriangleIcon className="h-4 w-4 shrink-0" /> {reactivateError}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 pt-1">
+              <button type="button" disabled={reactivating} onClick={() => setReactivateClient(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Cancel</button>
+              <button
+                type="button"
+                disabled={reactivating}
+                onClick={async () => {
+                  setReactivating(true);
+                  setReactivateError(null);
+                  try {
+                    await api.post(`/admin/organizations/${reactivateClient.id}/activate`);
+                    setReactivateClient(null);
+                    await fetchOnboarded(onboardedSearch, onboardedStatusFilter, onboardedPage, invoiceActivityFilter, activityLevelFilter, invoiceSort, onboardedFrom, onboardedTo, onboardedServiceFilter);
+                  } catch (err) {
+                    setReactivateError(err instanceof Error ? err.message : "Failed to reactivate client");
+                  } finally {
+                    setReactivating(false);
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <ArrowPathIcon className={cn("h-4 w-4", reactivating && "animate-spin")} />
+                {reactivating ? "Reactivating…" : "Reactivate client"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editingClient && (
         <EditCrmClientModal
           client={editingClient}
