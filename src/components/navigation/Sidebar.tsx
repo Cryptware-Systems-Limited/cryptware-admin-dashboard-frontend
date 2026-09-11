@@ -11,6 +11,7 @@ import {
   ChevronRightIcon,
   ExclamationTriangleIcon,
   Cog6ToothIcon,
+  CreditCardIcon,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeSolid,
@@ -19,6 +20,7 @@ import {
   GlobeAltIcon as GlobeSolid,
   DocumentTextIcon as DocSolid,
   Cog6ToothIcon as CogSolid,
+  CreditCardIcon as CreditCardSolid,
 } from "@heroicons/react/24/solid";
 import { cn } from "@/lib/utils";
 import { useEnv, type AppEnv } from "@/context/EnvContext";
@@ -30,6 +32,7 @@ const NAV_ITEMS = [
   { label: "Clients", href: "/clients", icon: UsersIcon, iconActive: UsersSolid },
   { label: "Geographic Coverage", href: "/geographic-coverage", icon: GlobeAltIcon, iconActive: GlobeSolid },
   { label: "Invoice Monitoring", href: "/invoice-monitoring", icon: DocumentTextIcon, iconActive: DocSolid },
+  { label: "Pricing & Billing", href: "/pricing-billing/subscriptions", icon: CreditCardIcon, iconActive: CreditCardSolid },
 ];
 
 const SETTINGS_ITEM = { label: "Settings", href: "/settings", icon: Cog6ToothIcon, iconActive: CogSolid };

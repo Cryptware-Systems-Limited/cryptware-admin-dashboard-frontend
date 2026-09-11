@@ -51,6 +51,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/clients": "Clients",
   "/geographic-coverage": "Geographic Coverage",
   "/invoice-monitoring": "Invoice Monitoring",
+  "/pricing-billing/subscriptions": "Subscription Monitoring",
 };
 
 const ROLE_LABEL: Record<string, string> = {

@@ -12,6 +12,7 @@ import Settings from "@/pages/Settings";
 import SystemAdminRoute from "@/components/SystemAdminRoute";
 import NotFound from "@/pages/NotFound";
 import ChangePassword from "@/pages/ChangePassword";
+import SubscriptionMonitoring from "@/pages/SubscriptionMonitoring";
 
 export const router = createBrowserRouter([
   // Public
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
           { path: "clients/:id", element: <ClientProfile /> },
           { path: "geographic-coverage", element: <GeographicCoverage /> },
           { path: "invoice-monitoring", element: <InvoiceMonitoring /> },
+          { path: "pricing-billing/subscriptions", element: <SubscriptionMonitoring /> },
           {
             path: "settings",
             element: (
