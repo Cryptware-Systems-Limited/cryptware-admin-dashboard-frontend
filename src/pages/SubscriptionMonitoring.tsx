@@ -203,7 +203,8 @@ export default function SubscriptionMonitoring() {
     } catch (requestError) {
       setRecords([]);
       setSummary(null);
-      setError(requestError instanceof Error ? requestError.message : "Unable to load subscriptions.");
+      console.error("Unable to load subscriptions", requestError);
+      setError("The subscription data is temporarily unavailable. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -228,7 +229,8 @@ export default function SubscriptionMonitoring() {
       const response = await api.get<{ status: string; data: SubscriptionDetails }>(`/admin/subscriptions/${id}`);
       setSelectedSubscription(response.data);
     } catch (requestError) {
-      setDetailsError(requestError instanceof Error ? requestError.message : "Unable to load subscription details.");
+      console.error("Unable to load subscription details", requestError);
+      setDetailsError("The subscription details are temporarily unavailable. Please try again.");
     } finally {
       setDetailsLoading(false);
     }
@@ -245,7 +247,8 @@ export default function SubscriptionMonitoring() {
       setReminderActionMessage("Reminder sent and recorded successfully.");
       void loadSubscriptions();
     } catch (requestError) {
-      setReminderActionMessage(requestError instanceof Error ? requestError.message : "The reminder could not be sent.");
+      console.error("Unable to send subscription reminder", requestError);
+      setReminderActionMessage("The reminder could not be sent. Please try again.");
     } finally {
       setSendingReminder(false);
     }
@@ -283,7 +286,8 @@ export default function SubscriptionMonitoring() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to export subscriptions.");
+      console.error("Unable to export subscriptions", requestError);
+      setError("The subscription export is temporarily unavailable. Please try again.");
     } finally {
       setExporting(false);
     }
