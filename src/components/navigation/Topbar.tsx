@@ -132,7 +132,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   }
 
   return (
-    <header className="flex items-center gap-4 px-6 py-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 transition-colors">
+    <header className="flex h-[72px] items-center gap-4 px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 transition-colors">
       {/* Mobile toggle */}
       <button
         onClick={onToggleSidebar}

@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { ArrowLeftIcon, EyeIcon, EyeSlashIcon, LockClosedIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
+import BrandMark from '@/components/BrandMark';
 
 type LoginStep = 'credentials' | 'setup' | 'verify' | 'backup-codes';
 
@@ -100,9 +101,7 @@ export default function Login() {
       }} />
       <div className={cn('relative w-full', step === 'backup-codes' ? 'max-w-lg' : 'max-w-sm')}>
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-orange-500 shadow-lg shadow-orange-500/30 mb-4">
-            <span className="text-white font-black text-lg">CW</span>
-          </div>
+          <BrandMark className="mx-auto mb-4 h-12 w-12 rounded-2xl shadow-lg shadow-slate-900/30" />
           <h1 className="text-2xl font-bold text-white">Cryptware</h1>
           <p className="text-slate-400 text-sm mt-1">Admin Console</p>
         </div>

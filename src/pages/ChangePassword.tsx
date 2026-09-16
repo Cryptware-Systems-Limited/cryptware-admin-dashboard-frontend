@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { EyeIcon, EyeSlashIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import BrandMark from "@/components/BrandMark";
 
 export default function ChangePassword() {
   const { logout } = useAuth();
@@ -41,7 +42,7 @@ export default function ChangePassword() {
       <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
       <div className="relative w-full max-w-sm">
         <div className="mb-7 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-lg font-black text-white shadow-lg shadow-orange-500/25">CW</div>
+          <BrandMark className="mx-auto mb-4 h-12 w-12 rounded-2xl shadow-lg shadow-slate-900/30" />
           <h1 className="text-2xl font-bold text-white">Create a new password</h1>
           <p className="mt-1 text-sm text-slate-400">Change your temporary password before continuing.</p>
         </div>

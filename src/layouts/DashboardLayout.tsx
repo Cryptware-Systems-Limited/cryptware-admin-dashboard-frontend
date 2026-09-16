@@ -10,19 +10,21 @@ export default function DashboardLayout() {
   const { isProd } = useEnv();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        {isProd && (
-          <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-red-600 text-white text-xs font-semibold shrink-0">
-            <ExclamationTriangleIcon className="w-3.5 h-3.5 shrink-0" />
-            PRODUCTION — You are viewing and modifying live data
-          </div>
-        )}
-        <Topbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-100 dark:bg-slate-950">
+      {isProd && (
+        <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-red-600 text-white text-xs font-semibold shrink-0">
+          <ExclamationTriangleIcon className="w-3.5 h-3.5 shrink-0" />
+          PRODUCTION — You are viewing and modifying live data
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Topbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
+          <main className="flex-1 overflow-y-auto p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );

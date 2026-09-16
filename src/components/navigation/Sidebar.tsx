@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEnv, type AppEnv } from "@/context/EnvContext";
 import { useAuth } from "@/context/AuthContext";
+import BrandMark from "@/components/BrandMark";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/overview", icon: HomeIcon, iconActive: HomeSolid },
@@ -71,14 +72,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       transition={{ duration: 0.25, ease: "easeInOut" }}
       className="relative flex flex-col h-full bg-white dark:bg-slate-950 shrink-0 overflow-hidden z-20 transition-colors border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_24px_rgba(15,23,42,0.06)] dark:shadow-[4px_0_24px_rgba(15,23,42,0.25)]"
     >
-      {/* Decorative gradient */}
-      <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-orange-600/15 to-transparent pointer-events-none" />
-
       {/* Logo */}
-      <div className="relative flex items-center gap-3 px-4 py-5 border-b border-slate-200 dark:border-slate-800/60">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-600 shrink-0 shadow-lg shadow-orange-600/30">
-          <span className="text-white font-bold text-sm">CW</span>
-        </div>
+      <div className="relative flex h-[72px] shrink-0 items-center gap-3 px-4 border-b border-slate-200 dark:border-slate-800/60">
+        <BrandMark className="h-9 w-9" />
         <AnimatePresence>
           {!collapsed && (
             <motion.div
