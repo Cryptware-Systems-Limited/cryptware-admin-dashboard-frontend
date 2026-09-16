@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "@/components/navigation/Sidebar";
 import Topbar from "@/components/navigation/Topbar";
 import { useEffect, useState } from "react";
@@ -10,12 +10,21 @@ export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProdBanner, setShowProdBanner] = useState(true);
   const { isProd } = useEnv();
+  const location = useLocation();
 
   useEffect(() => {
     if (!isProd) return;
     const timer = window.setTimeout(() => setShowProdBanner(false), 7_000);
     return () => window.clearTimeout(timer);
   }, [isProd]);
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.key, location.hash]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-100 dark:bg-slate-950">

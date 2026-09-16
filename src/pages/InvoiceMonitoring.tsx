@@ -57,7 +57,7 @@ export default function InvoiceMonitoring() {
         ))}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="invoice-monitor" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Invoice Monitor</h3>
           <div className="flex gap-2">

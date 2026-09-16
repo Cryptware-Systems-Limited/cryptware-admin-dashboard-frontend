@@ -380,7 +380,7 @@ export default function GeographicCoverage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
 
         {/* Map Area */}
-        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div id="nigeria-map" className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
             <div className="flex items-center gap-2">
               <div className="w-0.5 h-4 rounded-full bg-orange-500" />
@@ -582,7 +582,7 @@ export default function GeographicCoverage() {
         </div>
 
         {/* Zone Summary Panel */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div id="zone-summary" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
             <div className="w-0.5 h-4 rounded-full bg-blue-500" />
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Zone Summary</h3>
@@ -660,7 +660,7 @@ export default function GeographicCoverage() {
       </div>
 
       {/* ── Zone Panel Breakdown ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="zone-breakdown" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
           <div className="w-0.5 h-4 rounded-full bg-purple-500" />
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Zone Panel Breakdown</h3>
@@ -832,7 +832,7 @@ export default function GeographicCoverage() {
       </div>
 
       {/* ── Bar Chart: Clients per State ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="clients-per-state" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
           <div className="w-0.5 h-4 rounded-full bg-emerald-500" />
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Clients per State</h3>

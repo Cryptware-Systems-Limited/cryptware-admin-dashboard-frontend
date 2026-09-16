@@ -314,7 +314,7 @@ export default function SubscriptionMonitoring() {
         </button>
       </header>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section id="subscription-health" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => (
           <button type="button" onClick={() => applyHealthCard(card.id)} key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-500/30 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-orange-500/40" aria-label={`Filter by ${card.label}`}>
             <div className={cn("mb-3 flex h-9 w-9 items-center justify-center rounded-xl", card.bg)}><card.icon className={cn("h-5 w-5", card.color)} /></div>
@@ -324,7 +324,7 @@ export default function SubscriptionMonitoring() {
         ))}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section id="subscription-filters" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <label className="relative xl:col-span-2">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -348,7 +348,7 @@ export default function SubscriptionMonitoring() {
           <button onClick={() => void loadSubscriptions()} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 dark:border-red-500/30 dark:text-red-400"><ArrowPathIcon className="h-4 w-4" /> Try again</button>
         </section>
       ) : (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section id="subscription-table" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800"><h2 className="font-semibold text-slate-900 dark:text-slate-100">Client subscriptions</h2><span className="text-xs text-slate-500">{pagination.total} records</span></div>
           <div className="overflow-x-auto">
             <table className="min-w-[1120px] w-full text-left text-sm">

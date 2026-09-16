@@ -213,9 +213,11 @@ export default function Clients() {
   const [stateFilter, setStateFilter] = useState<string>(() => searchParams.get("state") ?? "All");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
-    searchParams.get("tab") === "onboarded" || searchParams.get("status") ? "onboarded" : "master"
-  );
+  const activeTab: ActiveTab = searchParams.get("tab") === "migration"
+    ? "migration"
+    : searchParams.get("tab") === "onboarded" || searchParams.get("status")
+      ? "onboarded"
+      : "master";
 
   // ── Dashboard Migration state ──────────────────────────────────────────────
   const [migSearch, setMigSearch] = useState("");
@@ -505,7 +507,7 @@ export default function Clients() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
+      <div id="client-tabs" className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
         {([
           { id: "master",    label: "Client Master List" },
           { id: "migration", label: "Dashboard Migration" },
@@ -513,7 +515,7 @@ export default function Clients() {
         ] as { id: ActiveTab; label: string }[]).map(({ id, label }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id)}
+            onClick={() => setSearchParams(new URLSearchParams({ tab: id }), { replace: true })}
             className={cn(
               "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
               activeTab === id

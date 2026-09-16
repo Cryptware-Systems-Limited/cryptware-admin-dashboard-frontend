@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type SVGProps } from "react";
+import { type ComponentType, type SVGProps } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AdjustmentsHorizontalIcon,
@@ -88,13 +88,19 @@ export default function Settings() {
   )
     ? requestedSection!
     : CATEGORIES[0].id;
-  const [accessView, setAccessView] = useState<"users" | "roles">("users");
+  const accessView = searchParams.get("view") === "roles" ? "roles" : "users";
   const selected =
     CATEGORIES.find((category) => category.id === selectedId) ?? CATEGORIES[0];
   const SelectedIcon = selected.icon;
   const selectCategory = (id: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("section", id);
+    setSearchParams(next, { replace: true });
+  };
+  const selectAccessView = (view: "users" | "roles") => {
+    const next = new URLSearchParams(searchParams);
+    next.set("section", "users-roles");
+    next.set("view", view);
     setSearchParams(next, { replace: true });
   };
 
@@ -160,7 +166,7 @@ export default function Settings() {
           </nav>
         </aside>
 
-        <section className="p-6 sm:p-8 lg:min-h-0 lg:overflow-y-auto">
+        <section id="settings-content" className="p-6 sm:p-8 lg:min-h-0 lg:overflow-y-auto">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-500/10">
             <SelectedIcon className="h-7 w-7 text-orange-600 dark:text-orange-400" />
           </div>
@@ -179,7 +185,7 @@ export default function Settings() {
             <div className="mt-6">
               <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
                 <button
-                  onClick={() => setAccessView("users")}
+                  onClick={() => selectAccessView("users")}
                   className={cn(
                     "rounded-lg px-4 py-2 text-sm font-semibold transition",
                     accessView === "users"
@@ -190,7 +196,7 @@ export default function Settings() {
                   Users
                 </button>
                 <button
-                  onClick={() => setAccessView("roles")}
+                  onClick={() => selectAccessView("roles")}
                   className={cn(
                     "rounded-lg px-4 py-2 text-sm font-semibold transition",
                     accessView === "roles"

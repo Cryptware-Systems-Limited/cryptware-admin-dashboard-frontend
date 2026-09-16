@@ -171,7 +171,7 @@ function ClientSearch() {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+    <div id="quick-actions" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
       <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Quick Actions</h3>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -401,7 +401,7 @@ export default function Overview() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
         {/* Live invoice trend chart */}
-        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div id="invoice-volume-trend" className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="font-semibold text-slate-900 dark:text-slate-100">Invoice Volume Trend</h3>
@@ -441,7 +441,7 @@ export default function Overview() {
         </div>
 
         {/* Recent client activity (live from API) */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div id="recent-client-activity" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100">Recent Client Activity</h3>
             <span className="text-xs text-slate-400 dark:text-slate-500">Last 10 orgs</span>
@@ -494,7 +494,7 @@ export default function Overview() {
 
       {/* Client status distribution + environment transmission exports */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:h-[430px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col">
+        <div id="client-status-distribution" className="xl:h-[430px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Client Status Distribution</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-3">CRM and dashboard onboarding status</p>
           {loading ? <Skeleton className="h-56 w-full" /> : statusChartData.length === 0 ? (
@@ -512,7 +512,7 @@ export default function Overview() {
           )}
         </div>
 
-        <div className="xl:col-span-2 xl:h-[430px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col">
+        <div id="onboarded-transmissions" className="xl:col-span-2 xl:h-[430px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Onboarded Client Transmissions</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-5">Download test and production client transmission data</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

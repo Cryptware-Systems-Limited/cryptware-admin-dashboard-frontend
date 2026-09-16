@@ -271,7 +271,7 @@ export default function Reports() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
         {/* Volume Trend */}
-        <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div id="report-volume-trend" className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Invoice Volume Trend</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-5">Invoice count by period</p>
           {loading ? <Skeleton className="h-56 w-full" /> : data && data.volumeTrend.length > 0 ? (
@@ -295,7 +295,7 @@ export default function Reports() {
         </div>
 
         {/* Status Breakdown */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div id="report-invoice-status" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Invoice Status</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">FIRS sync status breakdown</p>
           {loading ? <Skeleton className="h-48 w-full" /> : pieData.length > 0 ? (
@@ -330,7 +330,7 @@ export default function Reports() {
       </div>
 
       {/* ── Top 10 Clients Table ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="top-clients" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
           <CalendarDaysIcon className="w-4 h-4 text-orange-500" />
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Top 10 Clients by Invoice Volume</h3>
@@ -376,7 +376,7 @@ export default function Reports() {
       </div>
 
       {/* ── All Clients Table ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="report-all-clients" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
           <UsersIcon className="w-4 h-4 text-blue-500" />
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">All Clients</h3>

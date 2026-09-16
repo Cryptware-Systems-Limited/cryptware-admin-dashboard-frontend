@@ -63,7 +63,16 @@ const ROLE_LABEL: Record<string, string> = {
   SYSTEM_VIEWER:    "Viewer",
 };
 
-const DASHBOARD_DESTINATIONS = [
+interface DashboardDestination {
+  label: string;
+  path: string;
+  description: string;
+  keywords: string;
+  section?: boolean;
+  systemAdminOnly?: boolean;
+}
+
+const DASHBOARD_DESTINATIONS: DashboardDestination[] = [
   { label: "Overview", path: "/overview", description: "Platform dashboard and quick actions", keywords: "home dashboard" },
   { label: "Reports", path: "/reports", description: "Analytics and reports", keywords: "statistics charts" },
   { label: "Clients", path: "/clients", description: "Client list and profiles", keywords: "organisations organizations customers" },
@@ -71,6 +80,33 @@ const DASHBOARD_DESTINATIONS = [
   { label: "Invoice Monitoring", path: "/invoice-monitoring", description: "Invoice processing and status", keywords: "invoices documents" },
   { label: "Subscription Monitoring", path: "/pricing-billing/subscriptions", description: "Plans, payments, and renewals", keywords: "pricing billing subscriptions reminders" },
   { label: "Settings", path: "/settings", description: "Admin settings and user management", keywords: "users roles notifications audit", systemAdminOnly: true },
+  { label: "Quick Actions", path: "/overview#quick-actions", description: "Overview · client search and actions", keywords: "find client retry invoices", section: true },
+  { label: "Invoice Volume Trend", path: "/overview#invoice-volume-trend", description: "Overview · platform invoice chart", keywords: "monthly quarterly annual", section: true },
+  { label: "Recent Client Activity", path: "/overview#recent-client-activity", description: "Overview · latest organisations", keywords: "recent clients", section: true },
+  { label: "Client Status Distribution", path: "/overview#client-status-distribution", description: "Overview · client status chart", keywords: "active suspended", section: true },
+  { label: "Onboarded Client Transmissions", path: "/overview#onboarded-transmissions", description: "Overview · test and production exports", keywords: "download csv", section: true },
+  { label: "Invoice Volume Report", path: "/reports#report-volume-trend", description: "Reports · invoice volume trend", keywords: "chart analytics", section: true },
+  { label: "Invoice Status Report", path: "/reports#report-invoice-status", description: "Reports · invoice status breakdown", keywords: "chart firs", section: true },
+  { label: "Top 10 Clients", path: "/reports#top-clients", description: "Reports · clients by invoice volume", keywords: "ranking", section: true },
+  { label: "All Clients Report", path: "/reports#report-all-clients", description: "Reports · full client activity table", keywords: "client invoices", section: true },
+  { label: "Client Master List", path: "/clients?tab=master#client-tabs", description: "Clients · CRM master list", keywords: "customers organisations", section: true },
+  { label: "Dashboard Migration", path: "/clients?tab=migration#client-tabs", description: "Clients · migration tracking", keywords: "credentials go live", section: true },
+  { label: "Onboarded Clients", path: "/clients?tab=onboarded#client-tabs", description: "Clients · onboarded client list", keywords: "status activity filters", section: true },
+  { label: "Nigeria Map", path: "/geographic-coverage#nigeria-map", description: "Geographic Coverage · client map", keywords: "states location", section: true },
+  { label: "Zone Summary", path: "/geographic-coverage#zone-summary", description: "Geographic Coverage · regional totals", keywords: "zones", section: true },
+  { label: "Zone Panel Breakdown", path: "/geographic-coverage#zone-breakdown", description: "Geographic Coverage · zone details", keywords: "regions", section: true },
+  { label: "Clients per State", path: "/geographic-coverage#clients-per-state", description: "Geographic Coverage · state breakdown", keywords: "locations", section: true },
+  { label: "Invoice Monitor", path: "/invoice-monitoring#invoice-monitor", description: "Invoice Monitoring · invoice table", keywords: "paid pending overdue", section: true },
+  { label: "Subscription Health Cards", path: "/pricing-billing/subscriptions#subscription-health", description: "Subscription Monitoring · active, due, and grace", keywords: "cancelled renewing soon payment", section: true },
+  { label: "Subscription Filters", path: "/pricing-billing/subscriptions#subscription-filters", description: "Subscription Monitoring · search and filters", keywords: "plan payment renewal reminder", section: true },
+  { label: "Client Subscriptions", path: "/pricing-billing/subscriptions#subscription-table", description: "Subscription Monitoring · subscription table", keywords: "details clients", section: true },
+  { label: "General Settings", path: "/settings?section=general#settings-content", description: "Settings · platform defaults", keywords: "configuration", section: true, systemAdminOnly: true },
+  { label: "User Management", path: "/settings?section=users-roles&view=users#settings-content", description: "Settings · administrators and access", keywords: "add user invite deactivate reset password", section: true, systemAdminOnly: true },
+  { label: "Roles & Permissions", path: "/settings?section=users-roles&view=roles#settings-content", description: "Settings · access roles", keywords: "user role management", section: true, systemAdminOnly: true },
+  { label: "Notification Settings", path: "/settings?section=notifications#settings-content", description: "Settings · alert configuration", keywords: "email notifications", section: true, systemAdminOnly: true },
+  { label: "Report Settings", path: "/settings?section=reports#settings-content", description: "Settings · report configuration", keywords: "schedule", section: true, systemAdminOnly: true },
+  { label: "System Configuration", path: "/settings?section=system#settings-content", description: "Settings · integrations and environment", keywords: "system health", section: true, systemAdminOnly: true },
+  { label: "Audit Logs", path: "/settings?section=audit#settings-content", description: "Settings · administrative activity", keywords: "history events", section: true, systemAdminOnly: true },
 ];
 
 interface TopbarProps {
@@ -92,10 +128,17 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const searchResults = DASHBOARD_DESTINATIONS.filter((destination) => {
     if (destination.systemAdminOnly && role !== "SYSTEM_ADMIN") return false;
+    if (!normalizedSearchQuery) return !destination.section;
     const searchableText = `${destination.label} ${destination.description} ${destination.keywords}`.toLowerCase();
-    return searchableText.includes(searchQuery.trim().toLowerCase());
+    return searchableText.includes(normalizedSearchQuery);
+  }).sort((first, second) => {
+    const score = (item: DashboardDestination) => item.label.toLowerCase() === normalizedSearchQuery ? 0 :
+      item.label.toLowerCase().startsWith(normalizedSearchQuery) ? 1 :
+        item.label.toLowerCase().includes(normalizedSearchQuery) ? 2 : 3;
+    return score(first) - score(second);
   });
 
   const openSearch = useCallback(() => {
@@ -202,7 +245,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
         className="flex items-center gap-2 rounded-xl border border-transparent bg-slate-100 p-2 text-sm text-slate-500 transition hover:border-slate-300 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-white sm:w-56 sm:px-3"
       >
         <MagnifyingGlassIcon className="w-4 h-4 shrink-0" />
-        <span className="hidden flex-1 text-left sm:block">Search pages...</span>
+        <span className="hidden flex-1 text-left sm:block">Search anywhere...</span>
         <kbd className="hidden rounded border border-slate-300 px-1 text-[10px] dark:border-slate-600 sm:block">Ctrl K</kbd>
       </button>
 
@@ -319,7 +362,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
           className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/60 px-4 pt-[min(18vh,9rem)] backdrop-blur-sm"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}
         >
-          <div role="dialog" aria-modal="true" aria-label="Search dashboard pages" className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+          <div role="dialog" aria-modal="true" aria-label="Search dashboard pages and sections" className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
               <MagnifyingGlassIcon className="h-5 w-5 shrink-0 text-slate-400" />
               <input
@@ -341,8 +384,8 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                     goToSearchResult(searchResults[selectedSearchIndex].path);
                   }
                 }}
-                placeholder="Where would you like to go?"
-                aria-label="Search dashboard pages"
+                placeholder="Search pages or sections..."
+                aria-label="Search dashboard pages and sections"
                 className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
               />
               <button type="button" onClick={() => setSearchOpen(false)} aria-label="Close search" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white">
@@ -365,8 +408,10 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                     <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">{destination.label}</span>
                     <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{destination.description}</span>
                   </span>
-                  {location.pathname === destination.path ? (
+                  {location.pathname + location.search + location.hash === destination.path ? (
                     <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">Current</span>
+                  ) : destination.section ? (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">Section</span>
                   ) : <ArrowRightIcon className="h-4 w-4 text-slate-400" />}
                 </button>
               )) : (
