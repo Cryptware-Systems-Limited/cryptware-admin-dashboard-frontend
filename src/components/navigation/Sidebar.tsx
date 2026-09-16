@@ -184,12 +184,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   Prod
                 </button>
               </div>
-              {isProd && (
-                <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1.5 rounded-lg bg-red-600/15 border border-red-500/30">
-                  <ExclamationTriangleIcon className="w-3 h-3 text-red-400 shrink-0" />
-                  <p className="text-red-400 text-[10px] font-medium">Live production data</p>
-                </div>
-              )}
             </motion.div>
           ) : (
             <motion.div

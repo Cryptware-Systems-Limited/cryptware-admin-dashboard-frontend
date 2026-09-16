@@ -1,20 +1,36 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "@/components/navigation/Sidebar";
 import Topbar from "@/components/navigation/Topbar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useEnv } from "@/context/EnvContext";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showProdBanner, setShowProdBanner] = useState(true);
   const { isProd } = useEnv();
+
+  useEffect(() => {
+    if (!isProd) return;
+    const timer = window.setTimeout(() => setShowProdBanner(false), 7_000);
+    return () => window.clearTimeout(timer);
+  }, [isProd]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-100 dark:bg-slate-950">
-      {isProd && (
-        <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-red-600 text-white text-xs font-semibold shrink-0">
-          <ExclamationTriangleIcon className="w-3.5 h-3.5 shrink-0" />
-          PRODUCTION — You are viewing and modifying live data
+      {isProd && showProdBanner && (
+        <div role="status" className="relative flex shrink-0 items-center justify-center gap-2 bg-red-600 px-10 py-1.5 text-xs font-semibold text-white">
+          <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" />
+          <span>PRODUCTION — You are viewing and modifying live data</span>
+          <button
+            type="button"
+            onClick={() => setShowProdBanner(false)}
+            aria-label="Dismiss production warning"
+            className="absolute right-3 rounded p-0.5 text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <XMarkIcon className="h-4 w-4" />
+          </button>
         </div>
       )}
       <div className="flex min-h-0 flex-1 overflow-hidden">
