@@ -8,8 +8,11 @@ import {
   CheckIcon,
   EnvelopeIcon,
   TrashIcon,
+  XMarkIcon,
+  ArrowRightIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
@@ -60,6 +63,16 @@ const ROLE_LABEL: Record<string, string> = {
   SYSTEM_VIEWER:    "Viewer",
 };
 
+const DASHBOARD_DESTINATIONS = [
+  { label: "Overview", path: "/overview", description: "Platform dashboard and quick actions", keywords: "home dashboard" },
+  { label: "Reports", path: "/reports", description: "Analytics and reports", keywords: "statistics charts" },
+  { label: "Clients", path: "/clients", description: "Client list and profiles", keywords: "organisations organizations customers" },
+  { label: "Geographic Coverage", path: "/geographic-coverage", description: "Client activity by location", keywords: "map countries regions" },
+  { label: "Invoice Monitoring", path: "/invoice-monitoring", description: "Invoice processing and status", keywords: "invoices documents" },
+  { label: "Subscription Monitoring", path: "/pricing-billing/subscriptions", description: "Plans, payments, and renewals", keywords: "pricing billing subscriptions reminders" },
+  { label: "Settings", path: "/settings", description: "Admin settings and user management", keywords: "users roles notifications audit", systemAdminOnly: true },
+];
+
 interface TopbarProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
@@ -75,6 +88,37 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const [unread, setUnread] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
+
+  const searchResults = DASHBOARD_DESTINATIONS.filter((destination) => {
+    if (destination.systemAdminOnly && role !== "SYSTEM_ADMIN") return false;
+    const searchableText = `${destination.label} ${destination.description} ${destination.keywords}`.toLowerCase();
+    return searchableText.includes(searchQuery.trim().toLowerCase());
+  });
+
+  const openSearch = useCallback(() => {
+    setSearchQuery("");
+    setSelectedSearchIndex(0);
+    setSearchOpen(true);
+  }, []);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openSearch();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [openSearch]);
+
+  function goToSearchResult(path: string) {
+    setSearchOpen(false);
+    navigate(path);
+  }
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -150,10 +194,17 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
       </div>
 
       {/* Search */}
-      <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 dark:text-slate-500 text-sm w-56 border border-transparent dark:border-slate-700">
+      <button
+        type="button"
+        onClick={openSearch}
+        aria-label="Search dashboard pages"
+        aria-keyshortcuts="Control+K Meta+K"
+        className="flex items-center gap-2 rounded-xl border border-transparent bg-slate-100 p-2 text-sm text-slate-500 transition hover:border-slate-300 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-white sm:w-56 sm:px-3"
+      >
         <MagnifyingGlassIcon className="w-4 h-4 shrink-0" />
-        <span>Search...</span>
-      </div>
+        <span className="hidden flex-1 text-left sm:block">Search pages...</span>
+        <kbd className="hidden rounded border border-slate-300 px-1 text-[10px] dark:border-slate-600 sm:block">Ctrl K</kbd>
+      </button>
 
       {/* Theme toggle */}
       <button
@@ -263,6 +314,70 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
           <ArrowRightStartOnRectangleIcon className="w-4 h-4" />
         </button>
       </div>
+      {searchOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/60 px-4 pt-[min(18vh,9rem)] backdrop-blur-sm"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Search dashboard pages" className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <MagnifyingGlassIcon className="h-5 w-5 shrink-0 text-slate-400" />
+              <input
+                autoFocus
+                type="search"
+                value={searchQuery}
+                onChange={(event) => { setSearchQuery(event.target.value); setSelectedSearchIndex(0); }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setSearchOpen(false);
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setSelectedSearchIndex((index) => searchResults.length ? (index + 1) % searchResults.length : 0);
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setSelectedSearchIndex((index) => searchResults.length ? (index - 1 + searchResults.length) % searchResults.length : 0);
+                  }
+                  if (event.key === "Enter" && searchResults[selectedSearchIndex]) {
+                    goToSearchResult(searchResults[selectedSearchIndex].path);
+                  }
+                }}
+                placeholder="Where would you like to go?"
+                aria-label="Search dashboard pages"
+                className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
+              />
+              <button type="button" onClick={() => setSearchOpen(false)} aria-label="Close search" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[min(24rem,55vh)] overflow-y-auto p-2">
+              {searchResults.length ? searchResults.map((destination, index) => (
+                <button
+                  key={destination.path}
+                  type="button"
+                  onClick={() => goToSearchResult(destination.path)}
+                  onMouseEnter={() => setSelectedSearchIndex(index)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
+                    index === selectedSearchIndex ? "bg-orange-50 dark:bg-orange-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800",
+                  )}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">{destination.label}</span>
+                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{destination.description}</span>
+                  </span>
+                  {location.pathname === destination.path ? (
+                    <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">Current</span>
+                  ) : <ArrowRightIcon className="h-4 w-4 text-slate-400" />}
+                </button>
+              )) : (
+                <p className="px-3 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No matching pages</p>
+              )}
+            </div>
+            <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-slate-400 dark:border-slate-700">Use ↑ ↓ to choose · Enter to open · Esc to close</div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </header>
   );
 }
