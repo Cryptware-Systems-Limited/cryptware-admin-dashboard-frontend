@@ -69,14 +69,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <motion.aside
       animate={{ width: collapsed ? 72 : 240 }}
       transition={{ duration: 0.25, ease: "easeInOut" }}
-      className="relative flex flex-col h-full bg-slate-900 dark:bg-slate-950 shrink-0 overflow-hidden z-20 transition-colors"
-      style={{ boxShadow: "4px 0 24px rgba(15,23,42,0.25)" }}
+      className="relative flex flex-col h-full bg-white dark:bg-slate-950 shrink-0 overflow-hidden z-20 transition-colors border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_24px_rgba(15,23,42,0.06)] dark:shadow-[4px_0_24px_rgba(15,23,42,0.25)]"
     >
       {/* Decorative gradient */}
       <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-orange-600/15 to-transparent pointer-events-none" />
 
       {/* Logo */}
-      <div className="relative flex items-center gap-3 px-4 py-5 border-b border-slate-700/60 dark:border-slate-800/60">
+      <div className="relative flex items-center gap-3 px-4 py-5 border-b border-slate-200 dark:border-slate-800/60">
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-600 shrink-0 shadow-lg shadow-orange-600/30">
           <span className="text-white font-bold text-sm">CW</span>
         </div>
@@ -89,8 +88,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               transition={{ duration: 0.18 }}
               className="overflow-hidden"
             >
-              <p className="text-white font-bold text-sm leading-tight whitespace-nowrap">Cryptware</p>
-              <p className="text-slate-400 text-xs whitespace-nowrap">Admin Console</p>
+              <p className="text-slate-900 dark:text-white font-bold text-sm leading-tight whitespace-nowrap">Cryptware</p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">Admin Console</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -113,7 +112,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 "group relative flex items-center gap-3 px-2.5 py-2.5 rounded-lg active:scale-95 transition-all duration-200",
                 isActive
                   ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-900"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-900"
               )}
             >
               {isActive && (
@@ -142,9 +141,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </AnimatePresence>
 
               {collapsed && (
-                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-800 dark:bg-slate-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-slate-700 z-50">
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-slate-200 dark:border-slate-700 z-50">
                   {item.label}
-                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800" />
+                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-white dark:border-r-slate-900" />
                 </div>
               )}
             </NavLink>
@@ -153,7 +152,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Bottom */}
-      <div className="px-2 pb-4 border-t border-slate-700/60 dark:border-slate-800/60 pt-3 space-y-2">
+      <div className="px-2 pb-4 border-t border-slate-200 dark:border-slate-800/60 pt-3 space-y-2">
 
         {/* Environment switcher */}
         <AnimatePresence>
@@ -164,15 +163,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               exit={{ opacity: 0 }}
               className="mx-0.5"
             >
-              <p className="text-slate-500 text-[10px] font-medium uppercase tracking-wider mb-1.5 px-1">Environment</p>
-              <div className="flex rounded-lg overflow-hidden border border-slate-700 text-xs font-semibold">
+              <p className="text-slate-500 dark:text-slate-500 text-[10px] font-medium uppercase tracking-wider mb-1.5 px-1">Environment</p>
+              <div className="flex rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 text-xs font-semibold">
                 <button
                   onClick={() => requestSwitch("preprod")}
                   className={cn(
                     "flex-1 py-1.5 transition-colors",
                     env === "preprod"
                       ? "bg-blue-600 text-white"
-                      : "text-slate-400 hover:text-white hover:bg-slate-700"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
                   )}
                 >
                   Preprod
@@ -183,7 +182,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     "flex-1 py-1.5 transition-colors",
                     env === "prod"
                       ? "bg-red-600 text-white"
-                      : "text-slate-400 hover:text-white hover:bg-slate-700"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
                   )}
                 >
                   Prod
@@ -219,7 +218,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         <button
           onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-900 active:scale-95 transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-900 active:scale-95 transition-all duration-200"
         >
           {collapsed ? (
             <ChevronRightIcon className="w-4 h-4" />
