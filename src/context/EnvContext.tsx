@@ -8,6 +8,28 @@ export function getStoredEnv(): AppEnv {
   return localStorage.getItem(STORAGE_KEY) === "prod" ? "prod" : "preprod";
 }
 
+function clearStoredAuth() {
+  localStorage.removeItem("cw_token");
+  localStorage.removeItem("cw_refresh_token");
+  localStorage.removeItem("cw_role");
+  localStorage.removeItem("cw_expires_at");
+  localStorage.removeItem("cw_must_change_password");
+}
+
+function getInitialEnv(): AppEnv {
+  const storedEnv = getStoredEnv();
+  if (window.location.pathname !== "/login") return storedEnv;
+
+  const requestedEnv = new URLSearchParams(window.location.search).get("env");
+  if (requestedEnv !== "prod" && requestedEnv !== "preprod") return storedEnv;
+
+  if (requestedEnv !== storedEnv) {
+    localStorage.setItem(STORAGE_KEY, requestedEnv);
+    clearStoredAuth();
+  }
+  return requestedEnv;
+}
+
 export function getApiBaseUrl(): string {
   const env = getStoredEnv();
   if (env === "prod") {
@@ -25,16 +47,13 @@ interface EnvContextValue {
 const EnvContext = createContext<EnvContextValue | null>(null);
 
 export function EnvProvider({ children }: { children: ReactNode }) {
-  const [env, setEnv] = useState<AppEnv>(getStoredEnv);
+  const [env, setEnv] = useState<AppEnv>(getInitialEnv);
 
   const switchEnv = useCallback((next: AppEnv, onSwitch: () => void) => {
     localStorage.setItem(STORAGE_KEY, next);
     setEnv(next);
     // Clear auth so user must re-login against the new environment
-    localStorage.removeItem("cw_token");
-    localStorage.removeItem("cw_refresh_token");
-    localStorage.removeItem("cw_role");
-    localStorage.removeItem("cw_expires_at");
+    clearStoredAuth();
     onSwitch();
   }, []);
 
