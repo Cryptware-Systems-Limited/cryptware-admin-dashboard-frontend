@@ -20,6 +20,7 @@ function getInitialEnv(): AppEnv {
   const storedEnv = getStoredEnv();
   if (window.location.pathname !== "/login") return storedEnv;
 
+  // Invitation links choose the matching API before auth state is loaded.
   const requestedEnv = new URLSearchParams(window.location.search).get("env");
   if (requestedEnv !== "prod" && requestedEnv !== "preprod") return storedEnv;
 
