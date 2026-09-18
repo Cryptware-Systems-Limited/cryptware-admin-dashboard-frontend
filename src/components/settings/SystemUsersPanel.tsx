@@ -6,6 +6,7 @@ import {
   ArrowPathIcon,
   PowerIcon,
   KeyIcon,
+  TrashIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
@@ -56,7 +57,7 @@ export default function SystemUsersPanel() {
   );
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState<{
-    type: "status" | "reset";
+    type: "status" | "reset" | "delete";
     user: SystemUser;
   } | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -149,6 +150,18 @@ export default function SystemUsersPanel() {
           ? error.message
           : "Unable to send password reset",
       );
+      return false;
+    }
+  }
+
+  async function remove(user: SystemUser) {
+    try {
+      await api.delete(`/admin/system-users/${user.id}`);
+      toast.success("User removed");
+      await load();
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to remove user");
       return false;
     }
   }
@@ -290,6 +303,14 @@ export default function SystemUsersPanel() {
                       >
                         <PowerIcon className="h-4 w-4" />
                       </button>
+                      <button
+                        title="Remove user"
+                        aria-label={`Remove ${user.fullName || user.email}`}
+                        onClick={() => setConfirmation({ type: "delete", user })}
+                        className="rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -308,10 +329,12 @@ export default function SystemUsersPanel() {
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start gap-4">
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${confirmation.type === "reset" || !confirmation.user.isActive ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" : "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400"}`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${confirmation.type === "reset" || (confirmation.type === "status" && !confirmation.user.isActive) ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" : "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400"}`}
               >
                 {confirmation.type === "reset" ? (
                   <KeyIcon className="h-5 w-5" />
+                ) : confirmation.type === "delete" ? (
+                  <TrashIcon className="h-5 w-5" />
                 ) : (
                   <PowerIcon className="h-5 w-5" />
                 )}
@@ -323,6 +346,8 @@ export default function SystemUsersPanel() {
                 >
                   {confirmation.type === "reset"
                     ? "Send password reset?"
+                    : confirmation.type === "delete"
+                      ? "Remove user?"
                     : confirmation.user.isActive
                       ? "Deactivate user?"
                       : "Reactivate user?"}
@@ -335,6 +360,13 @@ export default function SystemUsersPanel() {
                         {confirmation.user.email}
                       </strong>
                       .
+                    </>
+                  ) : confirmation.type === "delete" ? (
+                    <>
+                      <strong className="text-slate-800 dark:text-slate-200">
+                        {confirmation.user.fullName || confirmation.user.email}
+                      </strong>{" "}
+                      will lose admin access and disappear from this list. Their past activity and audit records will be kept.
                     </>
                   ) : confirmation.user.isActive ? (
                     <>
@@ -372,16 +404,20 @@ export default function SystemUsersPanel() {
                   const succeeded =
                     confirmation.type === "reset"
                       ? await reset(confirmation.user)
+                      : confirmation.type === "delete"
+                        ? await remove(confirmation.user)
                       : await toggle(confirmation.user);
                   setConfirming(false);
                   if (succeeded) setConfirmation(null);
                 }}
-                className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${confirmation.type === "status" && confirmation.user.isActive ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"}`}
+                className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${confirmation.type === "delete" || (confirmation.type === "status" && confirmation.user.isActive) ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"}`}
               >
                 {confirming
                   ? "Please wait…"
                   : confirmation.type === "reset"
                     ? "Send Reset Instructions"
+                    : confirmation.type === "delete"
+                      ? "Yes, Remove User"
                     : confirmation.user.isActive
                       ? "Yes, Deactivate"
                       : "Yes, Reactivate"}
