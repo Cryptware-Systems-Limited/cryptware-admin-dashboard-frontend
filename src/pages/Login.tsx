@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useEnv, type AppEnv } from '@/context/EnvContext';
 import { cn } from '@/lib/utils';
-import { ArrowLeftIcon, EyeIcon, EyeSlashIcon, LockClosedIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, BeakerIcon, BuildingOffice2Icon, EyeIcon, EyeSlashIcon, LockClosedIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
 import BrandMark from '@/components/BrandMark';
 
@@ -10,6 +11,7 @@ type LoginStep = 'credentials' | 'setup' | 'verify' | 'backup-codes';
 
 export default function Login() {
   const { login, verifyMfa, startMfaSetup, activateMfa, resendMfaCode } = useAuth();
+  const { env, switchEnv } = useEnv();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState('');
@@ -32,6 +34,14 @@ export default function Login() {
     setChallengeToken('');
     setCode('');
     setBackupCodes([]);
+  }
+
+  function handleEnvironmentChange(next: AppEnv) {
+    if (next === env || loading) return;
+    switchEnv(next, () => {
+      resetLogin();
+      toast.success(`Switched to ${next === 'prod' ? 'Production' : 'Preprod / Test'}.`);
+    });
   }
 
   async function handleCredentials(e: FormEvent) {
@@ -129,6 +139,54 @@ export default function Login() {
 
           {step === 'credentials' && (
             <form onSubmit={handleCredentials} className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-slate-400">Environment</label>
+                  <span className={cn(
+                    'text-[10px] font-semibold uppercase tracking-wide',
+                    env === 'prod' ? 'text-red-400' : 'text-blue-400',
+                  )}>
+                    {env === 'prod' ? 'Live data' : 'Safe testing'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-700 bg-slate-950/60 p-1" role="group" aria-label="Login environment">
+                  <button
+                    type="button"
+                    onClick={() => handleEnvironmentChange('preprod')}
+                    aria-pressed={env === 'preprod'}
+                    disabled={loading}
+                    className={cn(
+                      'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors disabled:opacity-50',
+                      env === 'preprod'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                    )}
+                  >
+                    <BeakerIcon className="h-3.5 w-3.5" />
+                    Preprod / Test
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEnvironmentChange('prod')}
+                    aria-pressed={env === 'prod'}
+                    disabled={loading}
+                    className={cn(
+                      'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors disabled:opacity-50',
+                      env === 'prod'
+                        ? 'bg-red-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                    )}
+                  >
+                    <BuildingOffice2Icon className="h-3.5 w-3.5" />
+                    Production
+                  </button>
+                </div>
+                {env === 'prod' && (
+                  <p className="mt-1.5 text-[11px] leading-4 text-red-300">
+                    You are signing in to live production. All actions affect real data.
+                  </p>
+                )}
+              </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Email address</label>
                 <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@cryptwaresystems.com" className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-orange-500/60" />
