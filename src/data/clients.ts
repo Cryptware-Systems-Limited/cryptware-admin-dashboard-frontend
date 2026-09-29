@@ -27,9 +27,9 @@ export interface PlatformActivity {
 export interface Client {
   id: string;
   name: string;
-  tin: string;
-  state: string;
-  zone: string;
+  tin: string | null;
+  state: string | null;
+  zone: string | null;
   erpSystem: string;
   serviceTypes: ServiceType[];
   projectStatus: ProjectStatus;

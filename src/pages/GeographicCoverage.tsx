@@ -162,6 +162,7 @@ export default function GeographicCoverage() {
   const clientsByState = useMemo(() => {
     const map: Record<string, Client[]> = {};
     for (const c of filteredClients) {
+      if (!c.state) continue;
       (map[c.state] ??= []).push(c);
     }
     return map;
