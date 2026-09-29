@@ -647,7 +647,7 @@ export default function Clients() {
                   ERP <SortIcon field="erpSystem" active={sortField} dir={sortDir} />
                 </TableHead>
                 <TableHead>Service</TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("projectStatus")}>
+                <TableHead className="min-w-[130px] cursor-pointer select-none" onClick={() => handleSort("projectStatus")}>
                   Status <SortIcon field="projectStatus" active={sortField} dir={sortDir} />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("ragStatus")}>
@@ -722,8 +722,8 @@ export default function Clients() {
                     </TableCell>
 
                     {/* Status */}
-                    <TableCell className="pt-3">
-                      <span className={cn("inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full", STATUS_BADGE[client.projectStatus])}>
+                    <TableCell className="pt-3 whitespace-nowrap">
+                      <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold px-2.5 py-1 rounded-full", STATUS_BADGE[client.projectStatus])}>
                         <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[client.projectStatus])} />
                         {client.projectStatus}
                       </span>
