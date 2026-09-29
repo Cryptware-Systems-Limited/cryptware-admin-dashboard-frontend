@@ -379,7 +379,7 @@ export default function Clients() {
     let list = crmClients;
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q) || c.tin.includes(q));
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.tin ?? "").toLowerCase().includes(q));
     }
     if (statusFilter !== "All")   list = list.filter((c) => c.projectStatus === statusFilter);
     if (serviceFilter !== "All")  list = list.filter((c) => c.serviceTypes.includes(serviceFilter as ServiceType));
@@ -394,7 +394,12 @@ export default function Clients() {
   }, [crmClients, search, statusFilter, serviceFilter, ragFilter, erpFilter, locationFilter, stateFilter, sortField, sortDir]);
 
   const availableStates = useMemo(
-    () => [...new Set(crmClients.filter(c => locationFilter === "All" || c.zone === locationFilter).map(c => c.state))].sort(),
+    () => [...new Set(
+      crmClients
+        .filter(c => locationFilter === "All" || c.zone === locationFilter)
+        .map(c => c.state)
+        .filter((state): state is string => Boolean(state)),
+    )].sort(),
     [crmClients, locationFilter],
   );
 
@@ -688,7 +693,7 @@ export default function Clients() {
                             {client.name}
                           </p>
                           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
-                            {client.tin}
+                            {client.tin || "TIN not provided"}
                           </p>
                         </div>
                       </div>
@@ -1272,7 +1277,9 @@ export default function Clients() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-tight">{client.name}</p>
-                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{client.state} · {client.zone}</p>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                              {[client.state, client.zone].filter(Boolean).join(" · ") || "Location not provided"}
+                            </p>
                           </div>
                         </div>
                       </TableCell>

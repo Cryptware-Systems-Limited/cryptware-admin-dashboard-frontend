@@ -316,10 +316,27 @@ export default function ClientProfile() {
 
   useEffect(() => {
     if (!id) { setProfileLoading(false); return; }
-    api.get<{ status: string; data: ClientProfileData }>(`/admin/clients/${id}/profile`)
-      .then((res) => setApiProfile(res.data))
-      .catch(() => { /* 404 or network error → fall back to mock data */ })
-      .finally(() => setProfileLoading(false));
+    setProfileLoading(true);
+    setApiProfile(null);
+    setClient(MOCK_CLIENTS.find((item) => item.id === id));
+
+    const loadProfile = async () => {
+      try {
+        const res = await api.get<{ status: string; data: ClientProfileData }>(`/admin/clients/${id}/profile`);
+        setApiProfile(res.data);
+      } catch {
+        try {
+          const res = await api.get<{ status: string; data: Client }>(`/admin/crm/clients/${id}`);
+          setClient(res.data);
+        } catch {
+          // The not-found view below handles IDs absent from both data sources.
+        }
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    void loadProfile();
   }, [id]);
 
   useEffect(() => {
@@ -1136,9 +1153,9 @@ export default function ClientProfile() {
                 <TagIcon className="w-3.5 h-3.5" /> {client.id}
               </span>
               <span className="flex items-center gap-1">
-                <MapPinIcon className="w-3.5 h-3.5" /> {client.state}, {client.zone}
+                <MapPinIcon className="w-3.5 h-3.5" /> {[client.state, client.zone].filter(Boolean).join(", ") || "Location not provided"}
               </span>
-              <span className="font-mono">{client.tin}</span>
+              <span className="font-mono">{client.tin || "TIN not provided"}</span>
             </div>
           </div>
 
