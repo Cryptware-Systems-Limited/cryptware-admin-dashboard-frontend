@@ -747,9 +747,11 @@ export default function Clients() {
                     {/* Edit */}
                     <TableCell className="text-right">
                       <button
+                        type="button"
                         onClick={(e) => { e.stopPropagation(); setEditingClient(client); }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10 transition opacity-0 group-hover:opacity-100"
-                        title="Edit CRM record"
+                        className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 focus-visible:text-orange-600 focus-visible:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40 dark:hover:bg-orange-500/10 dark:focus-visible:bg-orange-500/10 transition"
+                        title={`Edit ${client.name}`}
+                        aria-label={`Edit ${client.name}`}
                       >
                         <PencilSquareIcon className="w-4 h-4" />
                       </button>
