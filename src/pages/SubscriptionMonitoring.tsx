@@ -13,6 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 type SubscriptionStatus = "ACTIVE" | "GRACE_PERIOD" | "EXPIRED" | "CANCELLED";
 type PaymentStatus = "PAID" | "PENDING" | "OVERDUE" | "NOT_REQUIRED";
@@ -126,6 +127,7 @@ function RenewalTiming({ record }: { record: SubscriptionRecord }) {
 }
 
 export default function SubscriptionMonitoring() {
+  const { canSuspend: canEditAmount } = useAuth();
   const [records, setRecords] = useState<SubscriptionRecord[]>([]);
   const [summary, setSummary] = useState<SubscriptionResponse["data"]["summary"] | null>(null);
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 25, pages: 0 });
@@ -149,6 +151,9 @@ export default function SubscriptionMonitoring() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [reminderActionMessage, setReminderActionMessage] = useState<string | null>(null);
+  const [amountInput, setAmountInput] = useState("");
+  const [savingAmount, setSavingAmount] = useState(false);
+  const [amountMessage, setAmountMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -224,15 +229,46 @@ export default function SubscriptionMonitoring() {
     setDetailsLoading(true);
     setDetailsError(null);
     setReminderActionMessage(null);
+    setAmountMessage(null);
     setSelectedSubscription(null);
     try {
       const response = await api.get<{ status: string; data: SubscriptionDetails }>(`/admin/subscriptions/${id}`);
       setSelectedSubscription(response.data);
+      setAmountInput(String(response.data.amount));
     } catch (requestError) {
       console.error("Unable to load subscription details", requestError);
       setDetailsError("The subscription details are temporarily unavailable. Please try again.");
     } finally {
       setDetailsLoading(false);
+    }
+  }
+
+  async function saveAmount() {
+    if (!selectedSubscription || savingAmount) return;
+    const amount = Number(amountInput);
+    if (!/^\d+(\.\d{1,2})?$/.test(amountInput.trim()) || !Number.isFinite(amount) || amount < 0) {
+      setAmountMessage("Enter a valid non-negative amount with no more than two decimal places.");
+      return;
+    }
+
+    setSavingAmount(true);
+    setAmountMessage(null);
+    try {
+      const response = await api.patch<{ status: string; data: SubscriptionDetails }>(
+        `/admin/subscriptions/${selectedSubscription.id}/amount`,
+        { amount },
+      );
+      setSelectedSubscription(response.data);
+      setAmountInput(String(response.data.amount));
+      setRecords((current) => current.map((record) => record.id === response.data.id
+        ? { ...record, amount: response.data.amount, paymentStatus: response.data.paymentStatus, renewalStatus: response.data.renewalStatus }
+        : record));
+      setAmountMessage("Amount updated successfully.");
+      void loadSubscriptions();
+    } catch (requestError) {
+      setAmountMessage(requestError instanceof Error ? requestError.message : "The amount could not be updated.");
+    } finally {
+      setSavingAmount(false);
     }
   }
 
@@ -391,7 +427,45 @@ export default function SubscriptionMonitoring() {
                 <div className="space-y-5">
                   <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
                     <div className="mb-5 flex flex-wrap gap-2"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", subscriptionBadge[selectedSubscription.subscriptionStatus])}>{label(selectedSubscription.subscriptionStatus)}</span><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", paymentBadge[selectedSubscription.paymentStatus])}>{label(selectedSubscription.paymentStatus)}</span></div>
-                    <dl className="grid gap-5 sm:grid-cols-2"><Field label="Subscription reference" value={<span className="font-mono text-xs">{selectedSubscription.subscriptionReference}</span>} /><Field label="Plan" value={label(selectedSubscription.plan)} /><Field label="Amount" value={formatMoney(selectedSubscription.amount, selectedSubscription.currency)} /><Field label="Billing frequency" value={label(selectedSubscription.billingFrequency)} /><Field label="Subscription start" value={formatDate(selectedSubscription.subscriptionStartDate)} /><Field label="Current cycle start" value={formatDate(selectedSubscription.currentCycleStartDate)} /></dl>
+                    <dl className="grid gap-5 sm:grid-cols-2">
+                      <Field label="Subscription reference" value={<span className="font-mono text-xs">{selectedSubscription.subscriptionReference}</span>} />
+                      <Field label="Plan" value={label(selectedSubscription.plan)} />
+                      <div>
+                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amount</dt>
+                        {canEditAmount ? (
+                          <div className="mt-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="relative flex-1">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₦</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={amountInput}
+                                  onChange={(event) => { setAmountInput(event.target.value); setAmountMessage(null); }}
+                                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-7 pr-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                                  aria-label="Subscription amount in naira"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void saveAmount()}
+                                disabled={savingAmount || Number(amountInput) === selectedSubscription.amount}
+                                className="h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {savingAmount ? "Saving…" : "Save"}
+                              </button>
+                            </div>
+                            {amountMessage && <p className={cn("text-xs", amountMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{amountMessage}</p>}
+                          </div>
+                        ) : (
+                          <dd className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-200">{formatMoney(selectedSubscription.amount, selectedSubscription.currency)}</dd>
+                        )}
+                      </div>
+                      <Field label="Billing frequency" value={label(selectedSubscription.billingFrequency)} />
+                      <Field label="Subscription start" value={formatDate(selectedSubscription.subscriptionStartDate)} />
+                      <Field label="Current cycle start" value={formatDate(selectedSubscription.currentCycleStartDate)} />
+                    </dl>
                   </section>
 
                   <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700"><h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Payment information</h3><dl className="grid gap-5 sm:grid-cols-2"><Field label="Payment status" value={label(selectedSubscription.paymentStatus)} /><Field label="Last payment" value={formatDate(selectedSubscription.lastPaymentDate)} /><Field label="Payment provider" value={selectedSubscription.paymentProvider ? label(selectedSubscription.paymentProvider) : "—"} /><Field label="Transaction reference" value={<span className="font-mono text-xs">{selectedSubscription.transactionReference ?? "—"}</span>} /></dl></section>
