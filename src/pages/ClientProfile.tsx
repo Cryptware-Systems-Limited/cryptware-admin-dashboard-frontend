@@ -1115,6 +1115,7 @@ export default function ClientProfile() {
   // ── Mock-data profile (internal CRM clients from master / migration tabs) ──
   const rag = RAG_CONFIG[client.ragStatus];
   const isSuspended = client.platformActivity.accountStatus === "Suspended";
+  const linkedOrganizationId = client.platformActivity.linkedOrganizationId;
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -1426,15 +1427,23 @@ export default function ClientProfile() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-3">
-              {isSuspended ? (
+            {!linkedOrganizationId ? (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                <ShieldExclamationIcon className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  This CRM client is not linked to an onboarded organisation yet, so it has no platform logins or API keys to suspend.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                {isSuspended ? (
                 <button
                   disabled={actionLoading}
                   onClick={async () => {
                     setActionLoading(true);
                     setActionError(null);
                     try {
-                      await api.post(`/admin/organizations/${id}/activate`);
+                      await api.post(`/admin/organizations/${linkedOrganizationId}/activate`);
                       setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Active" } });
                     } catch (err: unknown) {
                       const message = err instanceof Error ? err.message : "Failed to activate client";
@@ -1447,14 +1456,14 @@ export default function ClientProfile() {
                 >
                   {actionLoading ? "Activating…" : "Reactivate Client"}
                 </button>
-              ) : (
+                ) : (
                 <button
                   disabled={actionLoading}
                   onClick={async () => {
                     setActionLoading(true);
                     setActionError(null);
                     try {
-                      await api.post(`/admin/organizations/${id}/suspend`);
+                      await api.post(`/admin/organizations/${linkedOrganizationId}/suspend`);
                       setClient((c) => c && { ...c, platformActivity: { ...c.platformActivity, accountStatus: "Suspended" } });
                     } catch (err: unknown) {
                       const message = err instanceof Error ? err.message : "Failed to suspend client";
@@ -1467,13 +1476,14 @@ export default function ClientProfile() {
                 >
                   {actionLoading ? "Suspending…" : "Suspend Client"}
                 </button>
-              )}
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                {isSuspended
-                  ? "Client is suspended. Reactivating restores all platform access."
-                  : "Suspending blocks all logins and API access for this organisation."}
-              </p>
-            </div>
+                )}
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {isSuspended
+                    ? "Client is suspended. Reactivating restores all platform access."
+                    : "Suspending blocks all logins and API access for this organisation."}
+                </p>
+              </div>
+            )}
 
             {isSuspended && (
               <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
