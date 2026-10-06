@@ -27,12 +27,15 @@ interface SubscriptionRecord {
   clientName: string;
   plan: string;
   amount: number;
+  paidAmount: number;
+  balanceDue: number;
   currency: string;
   subscriptionStatus: SubscriptionStatus;
   paymentStatus: PaymentStatus;
   subscriptionStartDate: string;
   lastRenewalDate: string;
   nextRenewalDate: string;
+  nextInstallmentDate: string | null;
   renewalStatus: RenewalStatus;
   daysRemainingUntilRenewal: number;
   daysOverdue: number;
@@ -101,6 +104,10 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function dateInputValue(value: string | null) {
+  return value ? new Date(value).toISOString().slice(0, 10) : "";
+}
+
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
 }
@@ -154,6 +161,14 @@ export default function SubscriptionMonitoring() {
   const [amountInput, setAmountInput] = useState("");
   const [savingAmount, setSavingAmount] = useState(false);
   const [amountMessage, setAmountMessage] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [nextInstallmentDate, setNextInstallmentDate] = useState("");
+  const [recordingPayment, setRecordingPayment] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [renewalDate, setRenewalDate] = useState("");
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -230,16 +245,77 @@ export default function SubscriptionMonitoring() {
     setDetailsError(null);
     setReminderActionMessage(null);
     setAmountMessage(null);
+    setPaymentMessage(null);
+    setScheduleMessage(null);
     setSelectedSubscription(null);
     try {
       const response = await api.get<{ status: string; data: SubscriptionDetails }>(`/admin/subscriptions/${id}`);
       setSelectedSubscription(response.data);
       setAmountInput(String(response.data.amount));
+      setPaymentAmount("");
+      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setNextInstallmentDate(dateInputValue(response.data.nextInstallmentDate));
+      setRenewalDate(dateInputValue(response.data.nextRenewalDate));
     } catch (requestError) {
       console.error("Unable to load subscription details", requestError);
       setDetailsError("The subscription details are temporarily unavailable. Please try again.");
     } finally {
       setDetailsLoading(false);
+    }
+  }
+
+  async function recordPayment() {
+    if (!selectedSubscription || recordingPayment) return;
+    const amount = Number(paymentAmount);
+    if (!/^\d+(\.\d{1,2})?$/.test(paymentAmount.trim()) || !Number.isFinite(amount) || amount <= 0) {
+      setPaymentMessage("Enter a valid payment amount greater than zero.");
+      return;
+    }
+    if (amount > selectedSubscription.balanceDue) {
+      setPaymentMessage(`Payment cannot exceed the remaining balance of ${formatMoney(selectedSubscription.balanceDue, selectedSubscription.currency)}.`);
+      return;
+    }
+    if (!paymentDate) {
+      setPaymentMessage("Select the date the payment was received.");
+      return;
+    }
+    setRecordingPayment(true);
+    setPaymentMessage(null);
+    try {
+      const response = await api.post<{ status: string; data: SubscriptionDetails }>(
+        `/admin/subscriptions/${selectedSubscription.id}/payments`,
+        { amount, paymentDate, nextInstallmentDate: nextInstallmentDate || null },
+      );
+      setSelectedSubscription(response.data);
+      setPaymentAmount("");
+      setNextInstallmentDate(dateInputValue(response.data.nextInstallmentDate));
+      setPaymentMessage("Payment recorded successfully.");
+      void loadSubscriptions();
+    } catch (requestError) {
+      setPaymentMessage(requestError instanceof Error ? requestError.message : "The payment could not be recorded.");
+    } finally {
+      setRecordingPayment(false);
+    }
+  }
+
+  async function saveSchedule() {
+    if (!selectedSubscription || savingSchedule || !renewalDate) return;
+    setSavingSchedule(true);
+    setScheduleMessage(null);
+    try {
+      const response = await api.patch<{ status: string; data: SubscriptionDetails }>(
+        `/admin/subscriptions/${selectedSubscription.id}/schedule`,
+        { renewalDate, nextInstallmentDate: nextInstallmentDate || null },
+      );
+      setSelectedSubscription(response.data);
+      setRenewalDate(dateInputValue(response.data.nextRenewalDate));
+      setNextInstallmentDate(dateInputValue(response.data.nextInstallmentDate));
+      setScheduleMessage("Payment schedule updated successfully.");
+      void loadSubscriptions();
+    } catch (requestError) {
+      setScheduleMessage(requestError instanceof Error ? requestError.message : "The payment schedule could not be updated.");
+    } finally {
+      setSavingSchedule(false);
     }
   }
 
@@ -468,9 +544,53 @@ export default function SubscriptionMonitoring() {
                     </dl>
                   </section>
 
-                  <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700"><h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Payment information</h3><dl className="grid gap-5 sm:grid-cols-2"><Field label="Payment status" value={label(selectedSubscription.paymentStatus)} /><Field label="Last payment" value={formatDate(selectedSubscription.lastPaymentDate)} /><Field label="Payment provider" value={selectedSubscription.paymentProvider ? label(selectedSubscription.paymentProvider) : "—"} /><Field label="Transaction reference" value={<span className="font-mono text-xs">{selectedSubscription.transactionReference ?? "—"}</span>} /></dl></section>
+                  <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                    <h3 className="font-semibold text-slate-900 dark:text-white">Payment information</h3>
+                    <dl className="mt-4 grid gap-5 sm:grid-cols-3">
+                      <Field label="Full amount" value={formatMoney(selectedSubscription.amount, selectedSubscription.currency)} />
+                      <Field label="Paid this cycle" value={formatMoney(selectedSubscription.paidAmount, selectedSubscription.currency)} />
+                      <Field label="Balance due" value={formatMoney(selectedSubscription.balanceDue, selectedSubscription.currency)} />
+                      <Field label="Payment status" value={label(selectedSubscription.paymentStatus)} />
+                      <Field label="Last payment" value={formatDate(selectedSubscription.lastPaymentDate)} />
+                      <Field label="Next installment" value={formatDate(selectedSubscription.nextInstallmentDate)} />
+                    </dl>
+                    {canEditAmount && selectedSubscription.balanceDue > 0 && (
+                      <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Record installment payment</h4>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                          <label className="text-xs font-medium text-slate-500">Amount received
+                            <input type="number" min="0.01" max={selectedSubscription.balanceDue} step="0.01" value={paymentAmount} onChange={(event) => { setPaymentAmount(event.target.value); setPaymentMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="0.00" />
+                          </label>
+                          <label className="text-xs font-medium text-slate-500">Payment date
+                            <input type="date" value={paymentDate} onChange={(event) => { setPaymentDate(event.target.value); setPaymentMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+                          </label>
+                          <label className="text-xs font-medium text-slate-500">Next installment due
+                            <input type="date" value={nextInstallmentDate} onChange={(event) => { setNextInstallmentDate(event.target.value); setPaymentMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+                          </label>
+                        </div>
+                        <button type="button" onClick={() => void recordPayment()} disabled={recordingPayment || !paymentAmount || !paymentDate} className="mt-3 h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">{recordingPayment ? "Recording…" : "Record payment"}</button>
+                        {paymentMessage && <p className={cn("mt-2 text-xs", paymentMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{paymentMessage}</p>}
+                      </div>
+                    )}
+                  </section>
 
-                  <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700"><h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Renewal information</h3><dl className="grid gap-5 sm:grid-cols-2"><Field label="Last renewal" value={formatDate(selectedSubscription.lastRenewalDate)} /><Field label="Next renewal" value={formatDate(selectedSubscription.nextRenewalDate)} /><Field label="Renewal status" value={label(selectedSubscription.renewalStatus)} /><Field label="Countdown" value={selectedSubscription.daysOverdue > 0 ? `${selectedSubscription.daysOverdue} days overdue` : `${selectedSubscription.daysRemainingUntilRenewal} days remaining`} /></dl></section>
+                  <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                    <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Renewal information</h3>
+                    <dl className="grid gap-5 sm:grid-cols-2"><Field label="Last renewal" value={formatDate(selectedSubscription.lastRenewalDate)} /><Field label="Renewal status" value={label(selectedSubscription.renewalStatus)} /><Field label="Countdown" value={selectedSubscription.daysOverdue > 0 ? `${selectedSubscription.daysOverdue} days overdue` : `${selectedSubscription.daysRemainingUntilRenewal} days remaining`} /></dl>
+                    {canEditAmount ? (
+                      <div className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 dark:border-slate-800">
+                        <label className="text-xs font-medium text-slate-500">Renewal date
+                          <input type="date" value={renewalDate} onChange={(event) => { setRenewalDate(event.target.value); setScheduleMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+                        </label>
+                        <label className="text-xs font-medium text-slate-500">Next installment due
+                          <input type="date" value={nextInstallmentDate} max={renewalDate || undefined} onChange={(event) => { setNextInstallmentDate(event.target.value); setScheduleMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+                        </label>
+                        <div className="sm:col-span-2"><button type="button" onClick={() => void saveSchedule()} disabled={savingSchedule || !renewalDate} className="h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">{savingSchedule ? "Saving…" : "Save payment schedule"}</button>{scheduleMessage && <p className={cn("mt-2 text-xs", scheduleMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{scheduleMessage}</p>}</div>
+                      </div>
+                    ) : <div className="mt-5"><Field label="Next renewal" value={formatDate(selectedSubscription.nextRenewalDate)} /></div>}
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700"><h3 className="font-semibold text-slate-900 dark:text-white">Payment history</h3>{selectedSubscription.paymentHistory.length === 0 ? <p className="mt-4 text-sm text-slate-500">No payments have been recorded for this client.</p> : <ol className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">{selectedSubscription.paymentHistory.map((payment) => <li key={payment.id} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium text-slate-800 dark:text-slate-200">{payment.amount === null ? "Full payment" : formatMoney(payment.amount, payment.currency ?? selectedSubscription.currency)}</p><p className="mt-0.5 text-xs text-slate-500">{formatDate(payment.paidAt)} · {payment.provider ? label(payment.provider) : "Payment"}</p></div><span className="font-mono text-[10px] text-slate-400">{payment.reference ?? "—"}</span></li>)}</ol>}</section>
 
                   {selectedSubscription.gracePeriod && <section className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5"><h3 className="mb-4 font-semibold text-amber-600 dark:text-amber-400">Grace period</h3><dl className="grid gap-5 sm:grid-cols-2"><Field label="Status" value={label(selectedSubscription.gracePeriod.status)} /><Field label="Days overdue" value={selectedSubscription.gracePeriod.daysOverdue} /><Field label="Started" value={formatDate(selectedSubscription.gracePeriod.startedAt)} /><Field label="Ends" value={formatDate(selectedSubscription.gracePeriod.endsAt)} /></dl></section>}
 
