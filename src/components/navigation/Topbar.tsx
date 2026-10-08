@@ -54,6 +54,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/clients": "Clients",
   "/geographic-coverage": "Geographic Coverage",
   "/invoice-monitoring": "Invoice Monitoring",
+  "/invoice-alerts": "Alert Management",
   "/pricing-billing/subscriptions": "Subscription Monitoring",
 };
 
@@ -211,7 +212,11 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
 
   const title =
     PAGE_TITLES[location.pathname] ??
-    (location.pathname.startsWith("/clients/") ? "Client Profile" : "Dashboard");
+    (location.pathname.startsWith("/clients/")
+      ? "Client Profile"
+      : location.pathname.startsWith("/invoice-monitoring/")
+        ? "Invoice Detail"
+        : "Dashboard");
 
   function handleLogout() {
     logout();
