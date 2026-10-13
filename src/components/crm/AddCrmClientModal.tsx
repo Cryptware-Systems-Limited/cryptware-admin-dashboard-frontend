@@ -75,8 +75,8 @@ export default function AddCrmClientModal({ onClose, onCreated }: AddCrmClientMo
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.tin.trim()) {
-      setError("Name and TIN are required");
+    if (!form.name.trim()) {
+      setError("Company name is required");
       return;
     }
     if (form.serviceTypes.length === 0) {
@@ -90,7 +90,7 @@ export default function AddCrmClientModal({ onClose, onCreated }: AddCrmClientMo
       const zone = ZONES[form.state] ?? "Unknown";
       const payload = {
         name: form.name.trim(),
-        tin: form.tin.trim(),
+        tin: form.tin.trim() || null,
         state: form.state,
         zone,
         sector: form.sector,
@@ -150,14 +150,13 @@ export default function AddCrmClientModal({ onClose, onCreated }: AddCrmClientMo
               />
             </div>
             <div>
-              <label className={LABEL_CLASS}>TIN <span className="text-red-400">*</span></label>
+              <label className={LABEL_CLASS}>TIN <span className="font-normal normal-case text-slate-400">(optional)</span></label>
               <input
                 type="text"
                 value={form.tin}
                 onChange={(e) => set("tin", e.target.value)}
                 className={FIELD_CLASS}
                 placeholder="e.g. 10234567-0001"
-                required
               />
             </div>
             <div>

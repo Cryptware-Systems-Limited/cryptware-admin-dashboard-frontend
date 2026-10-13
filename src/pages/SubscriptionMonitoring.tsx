@@ -19,6 +19,7 @@ type SubscriptionStatus = "ACTIVE" | "GRACE_PERIOD" | "EXPIRED" | "CANCELLED";
 type PaymentStatus = "PAID" | "PENDING" | "OVERDUE" | "NOT_REQUIRED";
 type ReminderStatus = "SENT" | "PENDING" | "NOT_SENT" | "FAILED";
 type RenewalStatus = "SCHEDULED" | "COUNTDOWN" | "PAYMENT_DUE" | "GRACE_PERIOD";
+type PaymentStructure = "ONE_TIME" | "ONE_TIME_ANNUAL_MAINTENANCE" | "MONTHLY_FIXED_TERM";
 type RenewalPreset = "" | "TODAY" | "NEXT_3" | "NEXT_7" | "NEXT_10" | "NEXT_30" | "CUSTOM";
 
 interface SubscriptionRecord {
@@ -66,7 +67,14 @@ interface SubscriptionResponse {
 interface SubscriptionDetails extends SubscriptionRecord {
   subscriptionReference: string;
   clientEmail: string;
-  billingFrequency: "MONTHLY" | "ANNUAL";
+  billingFrequency: "ONE_TIME" | "MONTHLY" | "ANNUAL" | "ANNUAL_MAINTENANCE";
+  paymentStructure: PaymentStructure | null;
+  oneTimeAmount: number | null;
+  annualMaintenanceAmount: number | null;
+  annualMaintenanceStartDate: string | null;
+  monthlyAmount: number | null;
+  monthlyDurationMonths: number | null;
+  paymentPlanStartDate: string | null;
   currentCycleStartDate: string;
   gracePeriod: { status: "ACTIVE" | "EXPIRED"; startedAt: string; endsAt: string; daysOverdue: number } | null;
   paymentHistory: Array<{ id: string; status: string; provider: string | null; reference: string | null; amount: number | null; currency: string | null; paidAt: string }>;
@@ -160,9 +168,6 @@ export default function SubscriptionMonitoring() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [reminderActionMessage, setReminderActionMessage] = useState<string | null>(null);
-  const [amountInput, setAmountInput] = useState("");
-  const [savingAmount, setSavingAmount] = useState(false);
-  const [amountMessage, setAmountMessage] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [nextInstallmentDate, setNextInstallmentDate] = useState("");
@@ -171,6 +176,15 @@ export default function SubscriptionMonitoring() {
   const [renewalDate, setRenewalDate] = useState("");
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
+  const [paymentStructure, setPaymentStructure] = useState<PaymentStructure | "">("");
+  const [oneTimeAmount, setOneTimeAmount] = useState("");
+  const [annualMaintenanceAmount, setAnnualMaintenanceAmount] = useState("");
+  const [annualMaintenanceStartDate, setAnnualMaintenanceStartDate] = useState("");
+  const [monthlyAmount, setMonthlyAmount] = useState("");
+  const [monthlyDurationMonths, setMonthlyDurationMonths] = useState("");
+  const [paymentPlanStartDate, setPaymentPlanStartDate] = useState("");
+  const [savingPaymentStructure, setSavingPaymentStructure] = useState(false);
+  const [paymentStructureMessage, setPaymentStructureMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -247,18 +261,24 @@ export default function SubscriptionMonitoring() {
     setDetailsLoading(true);
     setDetailsError(null);
     setReminderActionMessage(null);
-    setAmountMessage(null);
     setPaymentMessage(null);
     setScheduleMessage(null);
+    setPaymentStructureMessage(null);
     setSelectedSubscription(null);
     try {
       const response = await api.get<{ status: string; data: SubscriptionDetails }>(`/admin/subscriptions/${id}`);
       setSelectedSubscription(response.data);
-      setAmountInput(String(response.data.amount));
       setPaymentAmount("");
       setPaymentDate(new Date().toISOString().slice(0, 10));
       setNextInstallmentDate(dateInputValue(response.data.nextInstallmentDate));
       setRenewalDate(dateInputValue(response.data.nextRenewalDate));
+      setPaymentStructure(response.data.paymentStructure ?? "");
+      setOneTimeAmount(response.data.oneTimeAmount === null ? "" : String(response.data.oneTimeAmount));
+      setAnnualMaintenanceAmount(response.data.annualMaintenanceAmount === null ? "" : String(response.data.annualMaintenanceAmount));
+      setAnnualMaintenanceStartDate(dateInputValue(response.data.annualMaintenanceStartDate));
+      setMonthlyAmount(response.data.monthlyAmount === null ? "" : String(response.data.monthlyAmount));
+      setMonthlyDurationMonths(response.data.monthlyDurationMonths === null ? "" : String(response.data.monthlyDurationMonths));
+      setPaymentPlanStartDate(dateInputValue(response.data.paymentPlanStartDate));
     } catch (requestError) {
       console.error("Unable to load subscription details", requestError);
       setDetailsError("The subscription details are temporarily unavailable. Please try again.");
@@ -322,32 +342,50 @@ export default function SubscriptionMonitoring() {
     }
   }
 
-  async function saveAmount() {
-    if (!selectedSubscription || savingAmount) return;
-    const amount = Number(amountInput);
-    if (!/^\d+(\.\d{1,2})?$/.test(amountInput.trim()) || !Number.isFinite(amount) || amount < 0) {
-      setAmountMessage("Enter a valid non-negative amount with no more than two decimal places.");
+  async function savePaymentStructure() {
+    if (!selectedSubscription || !paymentStructure || savingPaymentStructure) return;
+    const validMoney = (value: string) => /^\d+(\.\d{1,2})?$/.test(value.trim()) && Number(value) > 0;
+    if ((paymentStructure === "ONE_TIME" || paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE") && !validMoney(oneTimeAmount)) {
+      setPaymentStructureMessage("Enter a valid one-time amount greater than zero.");
+      return;
+    }
+    if (paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE" && (!validMoney(annualMaintenanceAmount) || !annualMaintenanceStartDate)) {
+      setPaymentStructureMessage("Enter the annual maintenance amount and its start date.");
+      return;
+    }
+    const duration = Number(monthlyDurationMonths);
+    if (paymentStructure === "MONTHLY_FIXED_TERM" && (!validMoney(monthlyAmount) || !Number.isInteger(duration) || duration < 1 || duration > 120 || !paymentPlanStartDate)) {
+      setPaymentStructureMessage("Enter the monthly amount, a start date, and a duration between 1 and 120 months.");
       return;
     }
 
-    setSavingAmount(true);
-    setAmountMessage(null);
+    setSavingPaymentStructure(true);
+    setPaymentStructureMessage(null);
     try {
       const response = await api.patch<{ status: string; data: SubscriptionDetails }>(
-        `/admin/subscriptions/${selectedSubscription.id}/amount`,
-        { amount },
+        `/admin/subscriptions/${selectedSubscription.id}/payment-structure`,
+        {
+          paymentStructure,
+          ...(paymentStructure === "ONE_TIME" ? { oneTimeAmount: Number(oneTimeAmount) } : {}),
+          ...(paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE" ? {
+            oneTimeAmount: Number(oneTimeAmount),
+            annualMaintenanceAmount: Number(annualMaintenanceAmount),
+            annualMaintenanceStartDate,
+          } : {}),
+          ...(paymentStructure === "MONTHLY_FIXED_TERM" ? {
+            monthlyAmount: Number(monthlyAmount),
+            monthlyDurationMonths: duration,
+            paymentPlanStartDate,
+          } : {}),
+        },
       );
       setSelectedSubscription(response.data);
-      setAmountInput(String(response.data.amount));
-      setRecords((current) => current.map((record) => record.id === response.data.id
-        ? { ...record, amount: response.data.amount, paymentStatus: response.data.paymentStatus, renewalStatus: response.data.renewalStatus }
-        : record));
-      setAmountMessage("Amount updated successfully.");
+      setPaymentStructureMessage("Payment arrangement updated successfully.");
       void loadSubscriptions();
     } catch (requestError) {
-      setAmountMessage(requestError instanceof Error ? requestError.message : "The amount could not be updated.");
+      setPaymentStructureMessage(requestError instanceof Error ? requestError.message : "The payment arrangement could not be updated.");
     } finally {
-      setSavingAmount(false);
+      setSavingPaymentStructure(false);
     }
   }
 
@@ -513,42 +551,89 @@ export default function SubscriptionMonitoring() {
                       <Field label="Subscription reference" value={<span className="font-mono text-xs">{selectedSubscription.subscriptionReference}</span>} />
                       <Field label="Client type" value={selectedSubscription.accessType === "BOTH" ? "Dashboard + API" : selectedSubscription.accessType === "API" ? "API only" : "Dashboard only"} />
                       <Field label="Plan" value={label(selectedSubscription.plan)} />
-                      <div>
-                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amount</dt>
-                        {canEditAmount ? (
-                          <div className="mt-1 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <div className="relative flex-1">
-                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₦</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={amountInput}
-                                  onChange={(event) => { setAmountInput(event.target.value); setAmountMessage(null); }}
-                                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-7 pr-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                                  aria-label="Subscription amount in naira"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void saveAmount()}
-                                disabled={savingAmount || Number(amountInput) === selectedSubscription.amount}
-                                className="h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                {savingAmount ? "Saving…" : "Save"}
-                              </button>
-                            </div>
-                            {amountMessage && <p className={cn("text-xs", amountMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{amountMessage}</p>}
-                          </div>
-                        ) : (
-                          <dd className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-200">{formatMoney(selectedSubscription.amount, selectedSubscription.currency)}</dd>
-                        )}
-                      </div>
                       <Field label="Billing frequency" value={label(selectedSubscription.billingFrequency)} />
                       <Field label="Subscription start" value={formatDate(selectedSubscription.subscriptionStartDate)} />
                       <Field label="Current cycle start" value={formatDate(selectedSubscription.currentCycleStartDate)} />
                     </dl>
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                    <div>
+                      <h3 className="font-semibold text-slate-900 dark:text-white">Payment arrangement</h3>
+                      <p className="mt-1 text-xs text-slate-500">Choose how this client pays for the subscription.</p>
+                    </div>
+                    {canEditAmount ? (
+                      <div className="mt-4 space-y-4">
+                        <label className="block text-xs font-medium text-slate-500">Arrangement
+                          <select
+                            value={paymentStructure}
+                            onChange={(event) => { setPaymentStructure(event.target.value as PaymentStructure | ""); setPaymentStructureMessage(null); }}
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                          >
+                            <option value="">Select a payment arrangement</option>
+                            <option value="ONE_TIME">One-time payment</option>
+                            <option value="ONE_TIME_ANNUAL_MAINTENANCE">One-time payment + recurring annual maintenance</option>
+                            <option value="MONTHLY_FIXED_TERM">Monthly subscription for a fixed number of months</option>
+                          </select>
+                        </label>
+
+                        {(paymentStructure === "ONE_TIME" || paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE") && (
+                          <label className="block text-xs font-medium text-slate-500">{paymentStructure === "ONE_TIME" ? "One-time amount" : "Initial one-time amount"}
+                            <div className="relative mt-1">
+                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₦</span>
+                              <input type="number" min="0.01" step="0.01" value={oneTimeAmount} onChange={(event) => { setOneTimeAmount(event.target.value); setPaymentStructureMessage(null); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-7 pr-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="0.00" />
+                            </div>
+                          </label>
+                        )}
+
+                        {paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE" && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="text-xs font-medium text-slate-500">Annual maintenance amount
+                              <div className="relative mt-1">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₦</span>
+                                <input type="number" min="0.01" step="0.01" value={annualMaintenanceAmount} onChange={(event) => { setAnnualMaintenanceAmount(event.target.value); setPaymentStructureMessage(null); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-7 pr-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="0.00" />
+                              </div>
+                            </label>
+                            <label className="text-xs font-medium text-slate-500">Maintenance starts
+                              <input type="date" value={annualMaintenanceStartDate} onChange={(event) => { setAnnualMaintenanceStartDate(event.target.value); setPaymentStructureMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+                            </label>
+                          </div>
+                        )}
+
+                        {paymentStructure === "MONTHLY_FIXED_TERM" && (
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="text-xs font-medium text-slate-500">Monthly amount
+                              <div className="relative mt-1">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₦</span>
+                                <input type="number" min="0.01" step="0.01" value={monthlyAmount} onChange={(event) => { setMonthlyAmount(event.target.value); setPaymentStructureMessage(null); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-7 pr-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="0.00" />
+                              </div>
+                            </label>
+                            <label className="text-xs font-medium text-slate-500">Number of months
+                              <input type="number" min="1" max="120" step="1" value={monthlyDurationMonths} onChange={(event) => { setMonthlyDurationMonths(event.target.value); setPaymentStructureMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="12" />
+                            </label>
+                            <label className="text-xs font-medium text-slate-500">Subscription starts
+                              <input type="date" value={paymentPlanStartDate} onChange={(event) => { setPaymentPlanStartDate(event.target.value); setPaymentStructureMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+                            </label>
+                            {Number(monthlyAmount) > 0 && Number(monthlyDurationMonths) > 0 && (
+                              <p className="text-xs text-slate-500 sm:col-span-3">Contract total: <span className="font-semibold text-slate-700 dark:text-slate-300">{formatMoney(Number(monthlyAmount) * Number(monthlyDurationMonths), selectedSubscription.currency)}</span></p>
+                            )}
+                          </div>
+                        )}
+
+                        <button type="button" onClick={() => void savePaymentStructure()} disabled={savingPaymentStructure || !paymentStructure} className="h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">{savingPaymentStructure ? "Saving…" : "Save payment arrangement"}</button>
+                        {paymentStructureMessage && <p className={cn("text-xs", paymentStructureMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{paymentStructureMessage}</p>}
+                      </div>
+                    ) : selectedSubscription.paymentStructure ? (
+                      <dl className="mt-4 grid gap-5 sm:grid-cols-2">
+                        <Field label="Arrangement" value={label(selectedSubscription.paymentStructure)} />
+                        {selectedSubscription.oneTimeAmount !== null && <Field label="One-time amount" value={formatMoney(selectedSubscription.oneTimeAmount, selectedSubscription.currency)} />}
+                        {selectedSubscription.annualMaintenanceAmount !== null && <Field label="Annual maintenance" value={formatMoney(selectedSubscription.annualMaintenanceAmount, selectedSubscription.currency)} />}
+                        {selectedSubscription.annualMaintenanceStartDate && <Field label="Maintenance starts" value={formatDate(selectedSubscription.annualMaintenanceStartDate)} />}
+                        {selectedSubscription.monthlyAmount !== null && <Field label="Monthly amount" value={formatMoney(selectedSubscription.monthlyAmount, selectedSubscription.currency)} />}
+                        {selectedSubscription.monthlyDurationMonths !== null && <Field label="Duration" value={`${selectedSubscription.monthlyDurationMonths} months`} />}
+                        {selectedSubscription.paymentPlanStartDate && <Field label="Subscription starts" value={formatDate(selectedSubscription.paymentPlanStartDate)} />}
+                      </dl>
+                    ) : <p className="mt-4 text-sm text-slate-500">No payment arrangement has been selected.</p>}
                   </section>
 
                   <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
