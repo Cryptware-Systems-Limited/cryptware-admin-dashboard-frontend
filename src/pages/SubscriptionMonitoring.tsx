@@ -38,6 +38,7 @@ interface SubscriptionRecord {
   lastRenewalDate: string;
   nextRenewalDate: string;
   nextInstallmentDate: string | null;
+  nextPaymentDate: string | null;
   renewalStatus: RenewalStatus;
   daysRemainingUntilRenewal: number;
   daysOverdue: number;
@@ -158,6 +159,9 @@ export default function SubscriptionMonitoring() {
   const [renewalPreset, setRenewalPreset] = useState<RenewalPreset>("");
   const [customFromMonth, setCustomFromMonth] = useState("");
   const [customToMonth, setCustomToMonth] = useState("");
+  const [paymentDuePreset, setPaymentDuePreset] = useState<RenewalPreset>("");
+  const [customPaymentFromMonth, setCustomPaymentFromMonth] = useState("");
+  const [customPaymentToMonth, setCustomPaymentToMonth] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -215,6 +219,27 @@ export default function SubscriptionMonitoring() {
     return { from: isoDate(today), to: isoDate(end) };
   }, [customFromMonth, customToMonth, renewalPreset]);
 
+  const paymentDueRange = useMemo(() => {
+    const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    if (!paymentDuePreset) return {};
+    if (paymentDuePreset === "CUSTOM") {
+      if (!customPaymentFromMonth && !customPaymentToMonth) return {};
+      const from = customPaymentFromMonth ? `${customPaymentFromMonth}-01` : undefined;
+      let to: string | undefined;
+      if (customPaymentToMonth) {
+        const [year, month] = customPaymentToMonth.split("-").map(Number);
+        to = isoDate(new Date(Date.UTC(year, month, 0)));
+      }
+      return { from, to };
+    }
+    const days = paymentDuePreset === "TODAY" ? 0 : Number(paymentDuePreset.replace("NEXT_", ""));
+    const end = new Date(today);
+    end.setUTCDate(end.getUTCDate() + days);
+    return { from: isoDate(today), to: isoDate(end) };
+  }, [customPaymentFromMonth, customPaymentToMonth, paymentDuePreset]);
+
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), limit: "25" });
     if (search) params.set("search", search);
@@ -226,8 +251,10 @@ export default function SubscriptionMonitoring() {
     if (renewalStatus) params.set("renewalStatus", renewalStatus);
     if (renewalRange.from) params.set("renewalFrom", renewalRange.from);
     if (renewalRange.to) params.set("renewalTo", renewalRange.to);
+    if (paymentDueRange.from) params.set("paymentDueFrom", paymentDueRange.from);
+    if (paymentDueRange.to) params.set("paymentDueTo", paymentDueRange.to);
     return params.toString();
-  }, [accessType, page, paymentStatus, plan, reminderStatus, renewalRange, renewalStatus, search, subscriptionStatus]);
+  }, [accessType, page, paymentDueRange, paymentStatus, plan, reminderStatus, renewalRange, renewalStatus, search, subscriptionStatus]);
 
   const loadSubscriptions = useCallback(async () => {
     setLoading(true);
@@ -419,6 +446,9 @@ export default function SubscriptionMonitoring() {
     setRenewalPreset("");
     setCustomFromMonth("");
     setCustomToMonth("");
+    setPaymentDuePreset("");
+    setCustomPaymentFromMonth("");
+    setCustomPaymentToMonth("");
     setPage(1);
   }
 
@@ -436,7 +466,7 @@ export default function SubscriptionMonitoring() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `subscription-monitoring-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `subscription-monitoring-${new Date().toISOString().slice(0, 10)}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
@@ -485,12 +515,14 @@ export default function SubscriptionMonitoring() {
             <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search client or reference..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
           </label>
           <select value={plan} onChange={(event) => { setPlan(event.target.value); setPage(1); }} className={selectClass}><option value="">All plans</option><option value="free">Free</option><option value="basic">Basic</option><option value="professional">Professional</option><option value="enterprise">Enterprise</option></select>
-          <select value={accessType} onChange={(event) => { setAccessType(event.target.value); setPage(1); }} className={selectClass}><option value="">All client types</option><option value="DASHBOARD">Dashboard only</option><option value="API">API only</option><option value="BOTH">Dashboard + API</option></select>
+          <select value={accessType} onChange={(event) => { setAccessType(event.target.value); setPage(1); }} className={selectClass}><option value="">All client types</option><option value="DASHBOARD">Dashboard only</option><option value="API">ERP only</option><option value="BOTH">Dashboard + ERP</option></select>
           <select value={subscriptionStatus} onChange={(event) => { setSubscriptionStatus(event.target.value); setPage(1); }} className={selectClass}><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="GRACE_PERIOD">Grace period</option><option value="EXPIRED">Expired</option><option value="CANCELLED">Cancelled</option></select>
-          <select value={paymentStatus} onChange={(event) => { setPaymentStatus(event.target.value); setPage(1); }} className={selectClass}><option value="">All payments</option><option value="PAID">Paid</option><option value="PENDING">Pending</option><option value="OVERDUE">Overdue</option><option value="NOT_REQUIRED">Not required</option></select>
+          <select value={paymentStatus} onChange={(event) => { setPaymentStatus(event.target.value); setPage(1); }} className={selectClass}><option value="">All payments</option><option value="UNPAID">Unpaid</option><option value="PAID">Paid</option><option value="PENDING">Pending</option><option value="OVERDUE">Overdue</option><option value="NOT_REQUIRED">Not required</option></select>
           <select value={reminderStatus} onChange={(event) => { setReminderStatus(event.target.value); setPage(1); }} className={selectClass}><option value="">All reminders</option><option value="SENT">Sent</option><option value="NOT_SENT">Not sent</option><option value="FAILED">Failed</option></select>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
+          <select value={paymentDuePreset} onChange={(event) => { setPaymentDuePreset(event.target.value as RenewalPreset); setPage(1); }} className={selectClass} aria-label="Upcoming payment date range"><option value="">All payment dates</option><option value="TODAY">Payments due today</option><option value="NEXT_3">Due in next 3 days</option><option value="NEXT_7">Due in next 7 days</option><option value="NEXT_10">Due in next 10 days</option><option value="NEXT_30">Due in next 30 days</option><option value="CUSTOM">Custom payment months</option></select>
+          {paymentDuePreset === "CUSTOM" && <><input type="month" value={customPaymentFromMonth} onChange={(event) => { setCustomPaymentFromMonth(event.target.value); setPage(1); }} className={selectClass} aria-label="Payment month from" /><span className="text-xs text-slate-400">to</span><input type="month" min={customPaymentFromMonth} value={customPaymentToMonth} onChange={(event) => { setCustomPaymentToMonth(event.target.value); setPage(1); }} className={selectClass} aria-label="Payment month to" /></>}
           <select value={renewalPreset} onChange={(event) => { setRenewalPreset(event.target.value as RenewalPreset); setPage(1); }} className={selectClass} aria-label="Renewal date range"><option value="">All renewal dates</option><option value="TODAY">Today</option><option value="NEXT_3">Next 3 days</option><option value="NEXT_7">Next 7 days</option><option value="NEXT_10">Next 10 days</option><option value="NEXT_30">Next 30 days</option><option value="CUSTOM">Custom months</option></select>
           {renewalPreset === "CUSTOM" && <><input type="month" value={customFromMonth} onChange={(event) => { setCustomFromMonth(event.target.value); setPage(1); }} className={selectClass} aria-label="Renewal month from" /><span className="text-xs text-slate-400">to</span><input type="month" min={customFromMonth} value={customToMonth} onChange={(event) => { setCustomToMonth(event.target.value); setPage(1); }} className={selectClass} aria-label="Renewal month to" /></>}
           <button onClick={clearFilters} className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Clear filters</button>
@@ -506,17 +538,18 @@ export default function SubscriptionMonitoring() {
         <section id="subscription-table" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800"><h2 className="font-semibold text-slate-900 dark:text-slate-100">Client subscriptions</h2><span className="text-xs text-slate-500">{pagination.total} records</span></div>
           <div className="overflow-x-auto">
-            <table className="min-w-[1240px] w-full text-left text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-950/60"><tr>{["Client", "Client type", "Plan", "Amount", "Subscription", "Payment", "Renewal date", "Countdown", "Reminder", "Details"].map((heading) => <th key={heading} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{heading}</th>)}</tr></thead>
+            <table className="min-w-[1360px] w-full text-left text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-950/60"><tr>{["Client", "Client type", "Plan", "Amount", "Subscription", "Payment", "Next payment", "Renewal date", "Countdown", "Reminder", "Details"].map((heading) => <th key={heading} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{heading}</th>)}</tr></thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {loading ? Array.from({ length: 6 }, (_, index) => <tr key={index}>{Array.from({ length: 10 }, (_, cell) => <td key={cell} className="px-5 py-4"><Skeleton className="h-4 w-full" /></td>)}</tr>) : records.map((record) => (
+                {loading ? Array.from({ length: 6 }, (_, index) => <tr key={index}>{Array.from({ length: 11 }, (_, cell) => <td key={cell} className="px-5 py-4"><Skeleton className="h-4 w-full" /></td>)}</tr>) : records.map((record) => (
                   <tr key={record.id} tabIndex={0} onClick={() => void openDetails(record.id)} onKeyDown={(event) => { if (event.key === "Enter") void openDetails(record.id); }} className="cursor-pointer transition hover:bg-slate-50/80 focus:bg-orange-50/50 focus:outline-none dark:hover:bg-slate-800/40 dark:focus:bg-orange-500/5" aria-label={`View ${record.clientName} subscription details`}>
                     <td className="px-5 py-4"><p className="max-w-56 truncate font-semibold text-slate-900 dark:text-slate-100" title={record.clientName}>{record.clientName}</p><p className="mt-0.5 font-mono text-[10px] text-slate-400">{record.organizationId.slice(0, 12)}</p></td>
-                    <td className="px-5 py-4"><span className="inline-flex whitespace-nowrap rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-500">{record.accessType === "BOTH" ? "Dashboard + API" : record.accessType === "API" ? "API only" : "Dashboard only"}</span></td>
+                    <td className="px-5 py-4"><span className="inline-flex whitespace-nowrap rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-500">{record.accessType === "BOTH" ? "Dashboard + ERP" : record.accessType === "API" ? "ERP only" : "Dashboard only"}</span></td>
                     <td className="px-5 py-4 font-medium capitalize text-slate-700 dark:text-slate-300">{record.plan}</td>
                     <td className="px-5 py-4 font-semibold text-slate-800 dark:text-slate-200">{formatMoney(record.amount, record.currency)}</td>
                     <td className="px-5 py-4"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", subscriptionBadge[record.subscriptionStatus])}>{label(record.subscriptionStatus)}</span></td>
                     <td className="px-5 py-4"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", paymentBadge[record.paymentStatus])}>{label(record.paymentStatus)}</span></td>
+                    <td className="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">{formatDate(record.nextPaymentDate)}</td>
                     <td className="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">{formatDate(record.nextRenewalDate)}</td>
                     <td className="px-5 py-4 text-xs"><RenewalTiming record={record} /></td>
                     <td className="px-5 py-4"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", reminderBadge[record.reminderStatus])}>{label(record.reminderStatus)}</span></td>
