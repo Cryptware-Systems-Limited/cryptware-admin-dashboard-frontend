@@ -196,15 +196,17 @@ export default function SubscriptionMonitoring() {
   const [paymentPlanStartDate, setPaymentPlanStartDate] = useState("");
   const [installmentPercentages, setInstallmentPercentages] = useState<string[]>(["100"]);
   const [clientWithholdsTax, setClientWithholdsTax] = useState(false);
-  const [vatAmount, setVatAmount] = useState("0");
-  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState("0");
+  const [vatRate, setVatRate] = useState("0");
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState("0");
   const [savingPaymentStructure, setSavingPaymentStructure] = useState(false);
   const [paymentStructureMessage, setPaymentStructureMessage] = useState<string | null>(null);
   const arrangementBaseAmount = paymentStructure === "MONTHLY_FIXED_TERM"
     ? Number(monthlyAmount || 0) * Number(monthlyDurationMonths || 0)
     : Number(oneTimeAmount || 0);
+  const calculatedVatAmount = arrangementBaseAmount * (Number(vatRate || 0) / 100);
+  const calculatedWithholdingTaxAmount = arrangementBaseAmount * (Number(withholdingTaxRate || 0) / 100);
   const arrangementTotalExpected = Math.max(
-    arrangementBaseAmount + (clientWithholdsTax ? 0 : Number(vatAmount || 0)) - (clientWithholdsTax ? Number(withholdingTaxAmount || 0) : 0),
+    arrangementBaseAmount + (clientWithholdsTax ? 0 : calculatedVatAmount) - (clientWithholdsTax ? calculatedWithholdingTaxAmount : 0),
     0,
   );
 
@@ -326,8 +328,8 @@ export default function SubscriptionMonitoring() {
       setPaymentPlanStartDate(dateInputValue(response.data.paymentPlanStartDate));
       setInstallmentPercentages(response.data.installmentPercentages.length ? response.data.installmentPercentages.map(String) : ["100"]);
       setClientWithholdsTax(response.data.withholdingTaxAmount > 0);
-      setVatAmount(String(response.data.vatAmount));
-      setWithholdingTaxAmount(String(response.data.withholdingTaxAmount));
+      setVatRate(response.data.baseAmount > 0 ? String(Number(((response.data.vatAmount / response.data.baseAmount) * 100).toFixed(4))) : "0");
+      setWithholdingTaxRate(response.data.baseAmount > 0 ? String(Number(((response.data.withholdingTaxAmount / response.data.baseAmount) * 100).toFixed(4))) : "0");
     } catch (requestError) {
       console.error("Unable to load subscription details", requestError);
       setDetailsError("The subscription details are temporarily unavailable. Please try again.");
@@ -409,10 +411,10 @@ export default function SubscriptionMonitoring() {
       setPaymentStructureMessage("Installment percentages must be greater than zero and total exactly 100%.");
       return;
     }
-    const parsedVat = Number(vatAmount || 0);
-    const parsedWithholdingTax = Number(withholdingTaxAmount || 0);
-    if (parsedVat < 0 || parsedWithholdingTax < 0) {
-      setPaymentStructureMessage("VAT and withholding tax cannot be negative.");
+    const parsedVatRate = Number(vatRate || 0);
+    const parsedWithholdingTaxRate = Number(withholdingTaxRate || 0);
+    if (parsedVatRate < 0 || parsedVatRate > 100 || parsedWithholdingTaxRate < 0 || parsedWithholdingTaxRate > 100) {
+      setPaymentStructureMessage("VAT and withholding-tax percentages must be between 0% and 100%.");
       return;
     }
     if (paymentStructure === "MONTHLY_FIXED_TERM" && (!validMoney(monthlyAmount) || !Number.isInteger(duration) || duration < 1 || duration > 120 || !paymentPlanStartDate)) {
@@ -428,8 +430,8 @@ export default function SubscriptionMonitoring() {
         {
           paymentStructure,
           installmentPercentages: percentages,
-          vatAmount: clientWithholdsTax ? 0 : parsedVat,
-          withholdingTaxAmount: clientWithholdsTax ? parsedWithholdingTax : 0,
+          vatAmount: clientWithholdsTax ? 0 : arrangementBaseAmount * (parsedVatRate / 100),
+          withholdingTaxAmount: clientWithholdsTax ? arrangementBaseAmount * (parsedWithholdingTaxRate / 100) : 0,
           ...(paymentStructure === "ONE_TIME" ? { oneTimeAmount: Number(oneTimeAmount) } : {}),
           ...(paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE" ? {
             oneTimeAmount: Number(oneTimeAmount),
@@ -709,13 +711,15 @@ export default function SubscriptionMonitoring() {
                         </div>
 
                         <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300"><input type="checkbox" checked={clientWithholdsTax} onChange={(event) => { setClientWithholdsTax(event.target.checked); if (event.target.checked) setVatAmount("0"); else setWithholdingTaxAmount("0"); }} className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500" /> Client is withholding tax</label>
+                          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300"><input type="checkbox" checked={clientWithholdsTax} onChange={(event) => { setClientWithholdsTax(event.target.checked); if (event.target.checked) setVatRate("0"); else setWithholdingTaxRate("0"); }} className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500" /> Client is withholding tax</label>
                           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <label className="text-xs font-medium text-slate-500">VAT amount
-                              <input type="number" min="0" step="0.01" disabled={clientWithholdsTax} value={clientWithholdsTax ? "0" : vatAmount} onChange={(event) => setVatAmount(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:disabled:bg-slate-800" />
+                            <label className="text-xs font-medium text-slate-500">VAT (%)
+                              <input type="number" min="0" max="100" step="0.01" disabled={clientWithholdsTax} value={clientWithholdsTax ? "0" : vatRate} onChange={(event) => setVatRate(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:disabled:bg-slate-800" />
+                              <span className="mt-1 block text-[11px] text-slate-400">Calculated VAT: {formatMoney(clientWithholdsTax ? 0 : calculatedVatAmount, selectedSubscription.currency)}</span>
                             </label>
-                            <label className="text-xs font-medium text-slate-500">Withholding tax
-                              <input type="number" min="0" step="0.01" disabled={!clientWithholdsTax} value={clientWithholdsTax ? withholdingTaxAmount : "0"} onChange={(event) => setWithholdingTaxAmount(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:disabled:bg-slate-800" />
+                            <label className="text-xs font-medium text-slate-500">Withholding tax (%)
+                              <input type="number" min="0" max="100" step="0.01" disabled={!clientWithholdsTax} value={clientWithholdsTax ? withholdingTaxRate : "0"} onChange={(event) => setWithholdingTaxRate(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:disabled:bg-slate-800" />
+                              <span className="mt-1 block text-[11px] text-slate-400">Calculated withholding: {formatMoney(clientWithholdsTax ? calculatedWithholdingTaxAmount : 0, selectedSubscription.currency)}</span>
                             </label>
                           </div>
                           <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-950"><span className="text-slate-500">Base amount</span><span className="text-right font-semibold text-slate-700 dark:text-slate-200">{formatMoney(arrangementBaseAmount, selectedSubscription.currency)}</span><span className="text-slate-500">Total expected</span><span className="text-right font-semibold text-orange-600">{formatMoney(arrangementTotalExpected, selectedSubscription.currency)}</span></div>
