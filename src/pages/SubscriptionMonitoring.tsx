@@ -9,6 +9,8 @@ import {
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
   NoSymbolIcon,
+  PlusIcon,
+  TrashIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { api } from "@/lib/api";
@@ -76,6 +78,11 @@ interface SubscriptionDetails extends SubscriptionRecord {
   monthlyAmount: number | null;
   monthlyDurationMonths: number | null;
   paymentPlanStartDate: string | null;
+  baseAmount: number;
+  totalExpected: number;
+  vatAmount: number;
+  withholdingTaxAmount: number;
+  installmentPercentages: number[];
   currentCycleStartDate: string;
   gracePeriod: { status: "ACTIVE" | "EXPIRED"; startedAt: string; endsAt: string; daysOverdue: number } | null;
   paymentHistory: Array<{ id: string; status: string; provider: string | null; reference: string | null; amount: number | null; currency: string | null; paidAt: string }>;
@@ -187,8 +194,19 @@ export default function SubscriptionMonitoring() {
   const [monthlyAmount, setMonthlyAmount] = useState("");
   const [monthlyDurationMonths, setMonthlyDurationMonths] = useState("");
   const [paymentPlanStartDate, setPaymentPlanStartDate] = useState("");
+  const [installmentPercentages, setInstallmentPercentages] = useState<string[]>(["100"]);
+  const [clientWithholdsTax, setClientWithholdsTax] = useState(false);
+  const [vatAmount, setVatAmount] = useState("0");
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState("0");
   const [savingPaymentStructure, setSavingPaymentStructure] = useState(false);
   const [paymentStructureMessage, setPaymentStructureMessage] = useState<string | null>(null);
+  const arrangementBaseAmount = paymentStructure === "MONTHLY_FIXED_TERM"
+    ? Number(monthlyAmount || 0) * Number(monthlyDurationMonths || 0)
+    : Number(oneTimeAmount || 0);
+  const arrangementTotalExpected = Math.max(
+    arrangementBaseAmount + (clientWithholdsTax ? 0 : Number(vatAmount || 0)) - (clientWithholdsTax ? Number(withholdingTaxAmount || 0) : 0),
+    0,
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -306,6 +324,10 @@ export default function SubscriptionMonitoring() {
       setMonthlyAmount(response.data.monthlyAmount === null ? "" : String(response.data.monthlyAmount));
       setMonthlyDurationMonths(response.data.monthlyDurationMonths === null ? "" : String(response.data.monthlyDurationMonths));
       setPaymentPlanStartDate(dateInputValue(response.data.paymentPlanStartDate));
+      setInstallmentPercentages(response.data.installmentPercentages.length ? response.data.installmentPercentages.map(String) : ["100"]);
+      setClientWithholdsTax(response.data.withholdingTaxAmount > 0);
+      setVatAmount(String(response.data.vatAmount));
+      setWithholdingTaxAmount(String(response.data.withholdingTaxAmount));
     } catch (requestError) {
       console.error("Unable to load subscription details", requestError);
       setDetailsError("The subscription details are temporarily unavailable. Please try again.");
@@ -381,6 +403,18 @@ export default function SubscriptionMonitoring() {
       return;
     }
     const duration = Number(monthlyDurationMonths);
+    const percentages = installmentPercentages.map(Number);
+    const percentageTotal = percentages.reduce((sum, value) => sum + value, 0);
+    if (percentages.some((value) => !Number.isFinite(value) || value <= 0 || value > 100) || Math.abs(percentageTotal - 100) > 0.001) {
+      setPaymentStructureMessage("Installment percentages must be greater than zero and total exactly 100%.");
+      return;
+    }
+    const parsedVat = Number(vatAmount || 0);
+    const parsedWithholdingTax = Number(withholdingTaxAmount || 0);
+    if (parsedVat < 0 || parsedWithholdingTax < 0) {
+      setPaymentStructureMessage("VAT and withholding tax cannot be negative.");
+      return;
+    }
     if (paymentStructure === "MONTHLY_FIXED_TERM" && (!validMoney(monthlyAmount) || !Number.isInteger(duration) || duration < 1 || duration > 120 || !paymentPlanStartDate)) {
       setPaymentStructureMessage("Enter the monthly amount, a start date, and a duration between 1 and 120 months.");
       return;
@@ -393,6 +427,9 @@ export default function SubscriptionMonitoring() {
         `/admin/subscriptions/${selectedSubscription.id}/payment-structure`,
         {
           paymentStructure,
+          installmentPercentages: percentages,
+          vatAmount: clientWithholdsTax ? 0 : parsedVat,
+          withholdingTaxAmount: clientWithholdsTax ? parsedWithholdingTax : 0,
           ...(paymentStructure === "ONE_TIME" ? { oneTimeAmount: Number(oneTimeAmount) } : {}),
           ...(paymentStructure === "ONE_TIME_ANNUAL_MAINTENANCE" ? {
             oneTimeAmount: Number(oneTimeAmount),
@@ -653,6 +690,37 @@ export default function SubscriptionMonitoring() {
                           </div>
                         )}
 
+                        <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                          <div className="flex items-center justify-between gap-3">
+                            <div><h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Installment split</h4><p className="mt-0.5 text-xs text-slate-500">Example: enter 70 and 30. The percentages must total 100%.</p></div>
+                            <button type="button" onClick={() => setInstallmentPercentages((values) => [...values, ""])} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-orange-500/30 px-3 text-xs font-semibold text-orange-600 hover:bg-orange-500/5"><PlusIcon className="h-4 w-4" /> Add installment</button>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {installmentPercentages.map((percentage, index) => (
+                              <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                                <label className="text-xs font-medium text-slate-500">Installment {index + 1} (%)
+                                  <input type="number" min="0.01" max="100" step="0.01" value={percentage} onChange={(event) => setInstallmentPercentages((values) => values.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="0" />
+                                </label>
+                                <div><p className="text-xs font-medium text-slate-500">Expected amount</p><p className="mt-1 flex h-10 items-center rounded-xl bg-slate-50 px-3 text-sm font-semibold text-slate-700 dark:bg-slate-950 dark:text-slate-200">{formatMoney(arrangementTotalExpected * (Number(percentage || 0) / 100), selectedSubscription.currency)}</p></div>
+                                <button type="button" disabled={installmentPercentages.length === 1} onClick={() => setInstallmentPercentages((values) => values.filter((_, itemIndex) => itemIndex !== index))} className="mb-0.5 rounded-lg p-2 text-slate-400 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-30" aria-label={`Remove installment ${index + 1}`}><TrashIcon className="h-5 w-5" /></button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300"><input type="checkbox" checked={clientWithholdsTax} onChange={(event) => { setClientWithholdsTax(event.target.checked); if (event.target.checked) setVatAmount("0"); else setWithholdingTaxAmount("0"); }} className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500" /> Client is withholding tax</label>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <label className="text-xs font-medium text-slate-500">VAT amount
+                              <input type="number" min="0" step="0.01" disabled={clientWithholdsTax} value={clientWithholdsTax ? "0" : vatAmount} onChange={(event) => setVatAmount(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:disabled:bg-slate-800" />
+                            </label>
+                            <label className="text-xs font-medium text-slate-500">Withholding tax
+                              <input type="number" min="0" step="0.01" disabled={!clientWithholdsTax} value={clientWithholdsTax ? withholdingTaxAmount : "0"} onChange={(event) => setWithholdingTaxAmount(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:disabled:bg-slate-800" />
+                            </label>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-950"><span className="text-slate-500">Base amount</span><span className="text-right font-semibold text-slate-700 dark:text-slate-200">{formatMoney(arrangementBaseAmount, selectedSubscription.currency)}</span><span className="text-slate-500">Total expected</span><span className="text-right font-semibold text-orange-600">{formatMoney(arrangementTotalExpected, selectedSubscription.currency)}</span></div>
+                        </div>
+
                         <button type="button" onClick={() => void savePaymentStructure()} disabled={savingPaymentStructure || !paymentStructure} className="h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">{savingPaymentStructure ? "Saving…" : "Save payment arrangement"}</button>
                         {paymentStructureMessage && <p className={cn("text-xs", paymentStructureMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{paymentStructureMessage}</p>}
                       </div>
@@ -665,6 +733,9 @@ export default function SubscriptionMonitoring() {
                         {selectedSubscription.monthlyAmount !== null && <Field label="Monthly amount" value={formatMoney(selectedSubscription.monthlyAmount, selectedSubscription.currency)} />}
                         {selectedSubscription.monthlyDurationMonths !== null && <Field label="Duration" value={`${selectedSubscription.monthlyDurationMonths} months`} />}
                         {selectedSubscription.paymentPlanStartDate && <Field label="Subscription starts" value={formatDate(selectedSubscription.paymentPlanStartDate)} />}
+                        <Field label="VAT" value={formatMoney(selectedSubscription.vatAmount, selectedSubscription.currency)} />
+                        <Field label="Withholding tax" value={formatMoney(selectedSubscription.withholdingTaxAmount, selectedSubscription.currency)} />
+                        <Field label="Installment split" value={selectedSubscription.installmentPercentages.length ? selectedSubscription.installmentPercentages.map((value) => `${value}%`).join(" / ") : "100%"} />
                       </dl>
                     ) : <p className="mt-4 text-sm text-slate-500">No payment arrangement has been selected.</p>}
                   </section>
@@ -672,8 +743,11 @@ export default function SubscriptionMonitoring() {
                   <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
                     <h3 className="font-semibold text-slate-900 dark:text-white">Payment information</h3>
                     <dl className="mt-4 grid gap-5 sm:grid-cols-3">
-                      <Field label="Full amount" value={formatMoney(selectedSubscription.amount, selectedSubscription.currency)} />
-                      <Field label="Paid this cycle" value={formatMoney(selectedSubscription.paidAmount, selectedSubscription.currency)} />
+                      <Field label="Base amount" value={formatMoney(selectedSubscription.baseAmount, selectedSubscription.currency)} />
+                      <Field label="VAT" value={formatMoney(selectedSubscription.vatAmount, selectedSubscription.currency)} />
+                      <Field label="Withholding tax" value={formatMoney(selectedSubscription.withholdingTaxAmount, selectedSubscription.currency)} />
+                      <Field label="Total expected" value={formatMoney(selectedSubscription.totalExpected, selectedSubscription.currency)} />
+                      <Field label="Amount paid" value={formatMoney(selectedSubscription.paidAmount, selectedSubscription.currency)} />
                       <Field label="Balance due" value={formatMoney(selectedSubscription.balanceDue, selectedSubscription.currency)} />
                       <Field label="Payment status" value={label(selectedSubscription.paymentStatus)} />
                       <Field label="Last payment" value={formatDate(selectedSubscription.lastPaymentDate)} />
@@ -681,7 +755,7 @@ export default function SubscriptionMonitoring() {
                     </dl>
                     {canEditAmount && selectedSubscription.balanceDue > 0 && (
                       <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
-                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Record installment payment</h4>
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200"><PlusIcon className="h-4 w-4 text-orange-500" /> Add payment received</h4>
                         <div className="mt-3 grid gap-3 sm:grid-cols-3">
                           <label className="text-xs font-medium text-slate-500">Amount received
                             <input type="number" min="0.01" max={selectedSubscription.balanceDue} step="0.01" value={paymentAmount} onChange={(event) => { setPaymentAmount(event.target.value); setPaymentMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" placeholder="0.00" />
@@ -693,7 +767,7 @@ export default function SubscriptionMonitoring() {
                             <input type="date" value={nextInstallmentDate} onChange={(event) => { setNextInstallmentDate(event.target.value); setPaymentMessage(null); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
                           </label>
                         </div>
-                        <button type="button" onClick={() => void recordPayment()} disabled={recordingPayment || !paymentAmount || !paymentDate} className="mt-3 h-10 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">{recordingPayment ? "Recording…" : "Record payment"}</button>
+                        <button type="button" onClick={() => void recordPayment()} disabled={recordingPayment || !paymentAmount || !paymentDate} className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">{!recordingPayment && <PlusIcon className="h-4 w-4" />}{recordingPayment ? "Recording…" : "Add payment"}</button>
                         {paymentMessage && <p className={cn("mt-2 text-xs", paymentMessage.includes("successfully") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>{paymentMessage}</p>}
                       </div>
                     )}
