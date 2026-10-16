@@ -538,7 +538,7 @@ export default function SubscriptionMonitoring() {
         <section id="subscription-table" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800"><h2 className="font-semibold text-slate-900 dark:text-slate-100">Client subscriptions</h2><span className="text-xs text-slate-500">{pagination.total} records</span></div>
           <div className="overflow-x-auto">
-            <table className="min-w-[1360px] w-full text-left text-sm">
+            <table className="min-w-[1480px] w-full text-left text-sm">
               <thead className="bg-slate-50 dark:bg-slate-950/60"><tr>{["Client", "Client type", "Plan", "Amount", "Subscription", "Payment", "Next payment", "Renewal date", "Countdown", "Reminder", "Details"].map((heading) => <th key={heading} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{heading}</th>)}</tr></thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {loading ? Array.from({ length: 6 }, (_, index) => <tr key={index}>{Array.from({ length: 11 }, (_, cell) => <td key={cell} className="px-5 py-4"><Skeleton className="h-4 w-full" /></td>)}</tr>) : records.map((record) => (
@@ -548,12 +548,12 @@ export default function SubscriptionMonitoring() {
                     <td className="px-5 py-4 font-medium capitalize text-slate-700 dark:text-slate-300">{record.plan}</td>
                     <td className="px-5 py-4 font-semibold text-slate-800 dark:text-slate-200">{formatMoney(record.amount, record.currency)}</td>
                     <td className="px-5 py-4"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", subscriptionBadge[record.subscriptionStatus])}>{label(record.subscriptionStatus)}</span></td>
-                    <td className="px-5 py-4"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", paymentBadge[record.paymentStatus])}>{label(record.paymentStatus)}</span></td>
+                    <td className="px-5 py-4"><span className={cn("inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold", paymentBadge[record.paymentStatus])}>{label(record.paymentStatus)}</span></td>
                     <td className="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">{formatDate(record.nextPaymentDate)}</td>
                     <td className="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">{formatDate(record.nextRenewalDate)}</td>
                     <td className="px-5 py-4 text-xs"><RenewalTiming record={record} /></td>
-                    <td className="px-5 py-4"><span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", reminderBadge[record.reminderStatus])}>{label(record.reminderStatus)}</span></td>
-                    <td className="px-5 py-4 text-xs font-semibold text-orange-600 dark:text-orange-400">View details</td>
+                    <td className="px-5 py-4"><span className={cn("inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold", reminderBadge[record.reminderStatus])}>{label(record.reminderStatus)}</span></td>
+                    <td className="whitespace-nowrap px-5 py-4 text-xs font-semibold text-orange-600 dark:text-orange-400">View details</td>
                   </tr>
                 ))}
               </tbody>
